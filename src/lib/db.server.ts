@@ -4,6 +4,7 @@
 // Ficheiro .server.ts — nunca incluído no bundle do cliente.
 
 import knex, { type Knex } from "knex";
+import { randomUUID } from "crypto";
 
 /** Normaliza o nome do driver para knex */
 function resolveClient(): string {
@@ -42,9 +43,13 @@ function buildConfig(): Knex.Config {
 
   // Modo simples: DATABASE_URL (string de conexão única)
   if (process.env.DATABASE_URL) {
+    const isPostgres = client === "pg";
     return {
       client,
-      connection: process.env.DATABASE_URL,
+      connection: {
+        connectionString: process.env.DATABASE_URL,
+        ssl: isPostgres && process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      },
       pool: { min: 2, max: 10 },
     };
   }
@@ -160,6 +165,30 @@ async function ensureSchema(db: Knex): Promise<void> {
       table.text("phone");
       table.timestamps(true, true);
     });
+  }
+
+  // Criar utilizador admin inicial se a tabela estiver vazia
+  try {
+    const usersCount = await db("users").count("id as count").first();
+    const count = usersCount ? Number(usersCount.count || (usersCount as any)['count(*)'] || 0) : 0;
+    if (count === 0) {
+      const bcrypt = (await import("bcryptjs")).default;
+      const adminEmail = (process.env.ADMIN_EMAIL || "admin@prudencio.pt").toLowerCase().trim();
+      const adminPassword = process.env.ADMIN_PASSWORD || "Rpavg5n";
+      const adminName = process.env.ADMIN_NAME || "Administrador";
+      const password_hash = await bcrypt.hash(adminPassword, 12);
+
+      await db("users").insert({
+        id: randomUUID(),
+        email: adminEmail,
+        password_hash,
+        name: adminName,
+        role: "admin",
+      });
+      console.log(`[db] Seeded initial admin user: ${adminEmail}`);
+    }
+  } catch (err) {
+    console.error("[db] Falha ao verificar/criar utilizador admin inicial:", err);
   }
 }
 

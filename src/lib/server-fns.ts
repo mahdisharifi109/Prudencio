@@ -20,7 +20,14 @@ const TOKEN_EXPIRY = "7d";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 dias
 
 function jwtSecret(): string {
-  return process.env.JWT_SECRET || "CHANGE_ME_IN_PRODUCTION";
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CRITICAL SECURITY ERROR: JWT_SECRET environment variable is not defined!");
+    }
+    return "CHANGE_ME_IN_DEVELOPMENT_ONLY";
+  }
+  return secret;
 }
 
 // ─── Cookie / JWT helpers ────────────────────────────────────────────
