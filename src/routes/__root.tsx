@@ -222,7 +222,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html:
-              "window.deferredPrompt = null; window.addEventListener('beforeinstallprompt', (e) => { window.deferredPrompt = e; });",
+              "window.deferredPrompt = null; window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.deferredPrompt = e; });",
           }}
         />
       </head>
