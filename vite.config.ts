@@ -1,4 +1,5 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { nitro } from "nitro/vite";
 
 if (process.env.VERCEL) {
   process.env.SERVER_PRESET = "vercel";
@@ -6,6 +7,7 @@ if (process.env.VERCEL) {
 
 // TanStack Start entry — points to our SSR error wrapper.
 export default defineConfig({
+  cloudflare: false,
   tanstackStart: {
     server: { entry: "server" },
   },
@@ -14,5 +16,10 @@ export default defineConfig({
       port: 8433,
       strictPort: false,
     },
+    plugins: [
+      nitro({
+        preset: "vercel",
+      }),
+    ],
   },
 });

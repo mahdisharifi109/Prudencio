@@ -39,3 +39,6 @@ dist-ssr
 # Databases
 *.sqlite
 *.sqlite-journal
+
+# Vercel local build folders
+.vercel/
