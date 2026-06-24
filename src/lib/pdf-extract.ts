@@ -2,7 +2,34 @@
 // Suporta Guias de Transporte e Guias/Notas de Devolução.
 // Extração visual de tabelas com deteção de colunas por coordenada X.
 
-import type { ChecklistItem } from "./firebase";
+import type { ChecklistItem } from "./types";
+
+const normalizarDataPT = (raw: string) => {
+  if (!raw) return "";
+
+  // Limpar espaços nas pontas e reduzir espaços internos
+  let limpo = raw.trim().replace(/\s+/g, "");
+
+  // 1. Procura padrão de data americana/ISO AAAA-MM-DD em qualquer lugar do texto
+  let isoMatch = limpo.match(/(\d{4})[-\/.](\d{2})[-\/.](\d{2})/);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const month = isoMatch[2];
+    const day = isoMatch[3];
+    return `${day}/${month}/${year}`;
+  }
+
+  // 2. Procura padrão europeu/PT DD-MM-AAAA ou DD/MM/AAAA em qualquer lugar do texto
+  let ptMatch = limpo.match(/(\d{2})[-\/.](\d{2})[-\/.](\d{4})/);
+  if (ptMatch) {
+    const day = ptMatch[1];
+    const month = ptMatch[2];
+    const year = ptMatch[3];
+    return `${day}/${month}/${year}`;
+  }
+
+  return raw;
+};
 
 export type TipoGuia = "transporte" | "devolucao";
 
@@ -59,14 +86,42 @@ export type ExtractedData = {
 };
 
 const UNIT_SET = new Set([
-  "M2", "M3", "ML", "UN", "KG", "LT", "L", "PC", "CX", "SC",
-  "UND", "MT", "M", "TON", "PAL", "KIT", "VB", "HR", "DIA",
+  "M2",
+  "M3",
+  "ML",
+  "UN",
+  "KG",
+  "LT",
+  "L",
+  "PC",
+  "CX",
+  "SC",
+  "UND",
+  "MT",
+  "M",
+  "TON",
+  "PAL",
+  "KIT",
+  "VB",
+  "HR",
+  "DIA",
 ]);
 
 const STOP_TOKENS = [
-  "este documento", "processado por", "atcud",
-  "total", "totais", "iva", "observa", "pagamento", "rodape", "rodapé",
-  "assinatura", "certificado", "software", "programa",
+  "este documento",
+  "processado por",
+  "atcud",
+  "total",
+  "totais",
+  "iva",
+  "observa",
+  "pagamento",
+  "rodape",
+  "rodapé",
+  "assinatura",
+  "certificado",
+  "software",
+  "programa",
   "não serve de fatura",
 ];
 
@@ -77,8 +132,8 @@ const DEVOLUCAO_PATTERNS = [
   /nota\s+de\s+devolu[çc][ãa]o/i,
   /guia\s+de\s+devolu[çc][ãa]o/i,
   /devolu[çc][ãa]o\s+de\s+mercadoria/i,
-  /\bND\b/,       // Nota de Devolução (código de documento)
-  /\bGD\b/,       // Guia de Devolução
+  /\bND\b/, // Nota de Devolução (código de documento)
+  /\bGD\b/, // Guia de Devolução
 ];
 
 /** Deteta o tipo de guia com base no texto completo do documento */
@@ -115,6 +170,7 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
   }
 
   const fullText = tokens.map((t) => t.str).join(" ");
+  console.log("TEXTO BRUTO DO PDF:", fullText);
 
   // ──── TIPO DE GUIA ────
   const tipo_guia = detectTipoGuia(fullText);
@@ -132,7 +188,11 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
   const chaveMatch = fullText.match(/Chave\s+AT\s*[:\s]+(\d{8,})/i);
   if (chaveMatch) {
     chave_at = chaveMatch[1];
-    validations.push({ field: "chave_at", status: "ok", message: `Chave AT extraída do texto: ${chave_at}` });
+    validations.push({
+      field: "chave_at",
+      status: "ok",
+      message: `Chave AT extraída do texto: ${chave_at}`,
+    });
   }
 
   // Método 2: tokens visuais "Chave" + "AT" adjacentes
@@ -140,15 +200,16 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
     for (let i = 0; i < tokens.length - 2; i++) {
       const t0 = tokens[i];
       const t1 = tokens[i + 1];
-      if (
-        t0.str.toLowerCase().includes("chave") &&
-        t1.str.toLowerCase().includes("at")
-      ) {
+      if (t0.str.toLowerCase().includes("chave") && t1.str.toLowerCase().includes("at")) {
         for (let j = i + 2; j < Math.min(i + 5, tokens.length); j++) {
           const candidate = tokens[j].str.replace(/[:\s]/g, "");
           if (/^\d{8,}$/.test(candidate)) {
             chave_at = candidate;
-            validations.push({ field: "chave_at", status: "ok", message: `Chave AT por posição visual: ${chave_at}` });
+            validations.push({
+              field: "chave_at",
+              status: "ok",
+              message: `Chave AT por posição visual: ${chave_at}`,
+            });
             break;
           }
         }
@@ -159,7 +220,11 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
 
   if (!chave_at) {
     chave_at_needs_validation = true;
-    validations.push({ field: "chave_at", status: "error", message: "Chave AT não encontrada — necessita validação manual" });
+    validations.push({
+      field: "chave_at",
+      status: "error",
+      message: "Chave AT não encontrada — necessita validação manual",
+    });
   }
 
   // ──── ATCUD ────
@@ -176,8 +241,7 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
     numero_guia = ndMatch ? `ND.${ndMatch[1]}` : "";
   } else {
     const gtMatch =
-      fullText.match(/GT\s+GT\.?(\d{4}\/\d+)/i) ||
-      fullText.match(/GT\.?(\d{4}\/\d+)/i);
+      fullText.match(/GT\s+GT\.?(\d{4}\/\d+)/i) || fullText.match(/GT\.?(\d{4}\/\d+)/i);
     numero_guia = gtMatch ? `GT.${gtMatch[1]}` : "";
   }
 
@@ -191,14 +255,14 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
     tipo_documento = tipoGTMatch ? "Guia de Transporte" : "";
   }
 
-  // ──── Data do Documento ────
+  // Regex que apanha qualquer data (YYYY-MM-DD ou DD/MM/YYYY, com traços ou barras)
+  const padraoData = /(\d{4}[-\/]\d{2}[-\/]\d{2}|\d{2}[-\/]\d{2}[-\/]\d{4})/;
+
+  // ──── DATA DO DOCUMENTO ────
   let data_documento = "";
-  const dataDocMatch = fullText.match(/(?:Requisi[çc][ãa]o|Data)[^0-9]{0,40}(\d{4}-\d{2}-\d{2})/i);
+  const dataDocMatch = fullText.match(padraoData);
   if (dataDocMatch) {
     data_documento = dataDocMatch[1];
-  } else {
-    const fallbackDate = fullText.match(/Data[^0-9]{0,30}(\d{4}-\d{2}-\d{2})/i);
-    if (fallbackDate) data_documento = fallbackDate[1];
   }
 
   // ──── V/N.º Contrib (NIF do cliente) ────
@@ -269,14 +333,36 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
 
   const destinatario: DestinatarioData = { nome: dest_nome, morada: dest_morada };
 
-  // ──── TRANSPORTE ────
-  const cargaDateMatch =
-    fullText.match(/(?:N\/\s*Morada|Carga)[\s\-]*(\d{4}-\d{2}-\d{2})\s*\/?\s*(\d{1,2}:\d{2})?/i) ||
-    fullText.match(/disposi[cç][aã]o\s+na\s+data\s+(\d{4}-\d{2}-\d{2})(?:\s*\/\s*(\d{1,2}:\d{2}))?/i);
-  const data_carga = cargaDateMatch ? cargaDateMatch[1] : "";
-  const hora_carga = cargaDateMatch && cargaDateMatch[2] ? cargaDateMatch[2] : "";
+  // ──── TRANSPORTE (Data e Hora de Carga) ────
+  let data_carga = "";
+  let hora_carga = "";
 
-  let carga_local = morada_emissor;
+  // Apanha qualquer data, ignora o lixo visual até 10 caracteres, e apanha a hora HH:MM
+  const cargaFlexMatch = fullText.match(
+    new RegExp(padraoData.source + `[^\\d]{0,10}(\\d{1,2}:\\d{2})`),
+  );
+
+  if (cargaFlexMatch) {
+    data_carga = cargaFlexMatch[1];
+    hora_carga = cargaFlexMatch[2];
+  } else {
+    // Fallback agressivo num raio de 100 caracteres após secções de transporte
+    const fallbackRegex = new RegExp(
+      `(?:Carga|Morada|Descarga|disposi[cç][aã]o)[\\s\\S]{0,100}?` +
+        padraoData.source +
+        `(?:[\\s\\S]{0,50}?(\\d{1,2}:\\d{2}))?`,
+      "i",
+    );
+    const cargaFallback = fullText.match(fallbackRegex);
+    if (cargaFallback) {
+      data_carga = cargaFallback[1];
+      hora_carga = cargaFallback[2] || "";
+    }
+  }
+
+  console.log("DATAS EXTRAÍDAS:", { data_documento, data_carga, hora_carga });
+
+  const carga_local = morada_emissor;
   let descarga_local = "";
   const descargaMatch = fullText.match(
     /(?:V\/\s*Morada|Descarga)[^A-Z]*?((?:Rua|Av|R\.|Travessa|Largo|Praça|Condom)[A-Za-zÀ-ÿ\s,.\-0-9]+)/i,
@@ -284,11 +370,15 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
   if (descargaMatch) descarga_local = descargaMatch[1].trim();
 
   let disponibilizacao = "";
-  const dispMatch = fullText.match(/colocados\s+[àa]\s+disposi[çc][ãa]o\s+na\s+data\s+(\d{4}-\d{2}-\d{2})/i);
+  const dispMatch = fullText.match(
+    /colocados\s+[àa]\s+disposi[çc][ãa]o\s+na\s+data\s+(\d{4}-\d{2}-\d{2})/i,
+  );
   if (dispMatch) disponibilizacao = dispMatch[1];
 
   let certificacao = "";
-  const certMatch = fullText.match(/Processado\s+por\s+Programa\s+Certificado\s+n\.?\s*[ºo]?\s*([^\n|]+?)(?:\s*[/|]|\s*$)/i);
+  const certMatch = fullText.match(
+    /Processado\s+por\s+Programa\s+Certificado\s+n\.?\s*[ºo]?\s*([^\n|]+?)(?:\s*[/|]|\s*$)/i,
+  );
   if (certMatch) certificacao = certMatch[1].trim();
 
   const transporte: TransporteData = {
@@ -312,9 +402,19 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
     if (/^[125689]\d{8}$/.test(code)) return true;
     const lower = context.toLowerCase();
     const fiscalKeywords = [
-      "contribuinte", "nif", "vat", "n.º contrib", "v/n", "cliente",
-      "telefone", "telemóvel", "fax", "email", "código postal",
-      "capital social", "matrícula",
+      "contribuinte",
+      "nif",
+      "vat",
+      "n.º contrib",
+      "v/n",
+      "cliente",
+      "telefone",
+      "telemóvel",
+      "fax",
+      "email",
+      "código postal",
+      "capital social",
+      "matrícula",
     ];
     if (fiscalKeywords.some((k) => lower.includes(k))) return true;
     return false;
@@ -334,10 +434,16 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
   // Encontrar o cabeçalho da tabela de artigos
   // Aceita: "Artigo" + ("Descrição" | "Descricao") + ("Qtd" | "Quant" | "Quantidade")
   let headerIdx = -1;
-  let xArtigo = 0, xDesc = 0, xQtd = 0, xUn = 0;
+  let xArtigo = 0,
+    xDesc = 0,
+    xQtd = 0,
+    xUn = 0;
 
   for (let i = 0; i < sortedLines.length; i++) {
-    const joined = sortedLines[i].map((t) => t.str).join(" ").toLowerCase();
+    const joined = sortedLines[i]
+      .map((t) => t.str)
+      .join(" ")
+      .toLowerCase();
     const hasArtigo = joined.includes("artigo");
     const hasDesc = joined.includes("descri");
     const hasQtd = joined.includes("qtd") || joined.includes("quant");
@@ -377,7 +483,11 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
       const first = line[0].str.trim();
       if (!/^\d{4,}$/.test(first)) continue;
       if (isForbidden(first, text)) {
-        validations.push({ field: "artigo", status: "warning", message: `Código fiscal ignorado: ${first}` });
+        validations.push({
+          field: "artigo",
+          status: "warning",
+          message: `Código fiscal ignorado: ${first}`,
+        });
         continue;
       }
 
@@ -411,15 +521,23 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
       seen.add(dedupeKey);
 
       items.push({ artigo, descricao: desc, quantidade: qty, unidade: unit, checked: false });
-      validations.push({ field: "artigo", status: "ok", message: `${artigo} — ${desc} (${qty} ${unit})` });
+      validations.push({
+        field: "artigo",
+        status: "ok",
+        message: `${artigo} — ${desc} (${qty} ${unit})`,
+      });
     }
   }
 
   // Fallback por regex se a tabela visual não foi detetada
   if (items.length === 0) {
-    validations.push({ field: "tabela", status: "warning", message: "Fallback: extração por regex no texto completo" });
+    validations.push({
+      field: "tabela",
+      status: "warning",
+      message: "Fallback: extração por regex no texto completo",
+    });
     const lineRegex =
-      /(\d{6,})\s+((?:(?!\d{6,})[A-Za-zÀ-ÿ0-9.,\-/()\s])+?)\s+(\d{1,6}(?:[.,]\d{1,3})?)\s+(M2|M3|ML|UN|KG|LT|L|PC|CX|SC|UND|MT|M|TON|PAL|KIT|VB|HR|DIA)\b/gi;
+      /(\d{4,})\s+((?:(?!\d{4,})[A-Za-zÀ-ÿ0-9.,\-/()\s])+?)\s+(\d{1,6}(?:[.,]\d{1,3})?)\s*(M2|M3|ML|UN|KG|LT|L|PC|CX|SC|UND|MT|M|TON|PAL|KIT|VB|HR|DIA)\b/gi;
     let m: RegExpExecArray | null;
     while ((m = lineRegex.exec(fullText)) !== null) {
       if (isForbidden(m[1], m[0])) continue;
@@ -449,23 +567,45 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
       qr_at_code = best.atCode;
       qr_raw = best.raw;
       qr_confidence = best.confidence;
-      validations.push({ field: "qr_code", status: "ok", message: `QR Code lido com ${qr_confidence}% confiança` });
+      validations.push({
+        field: "qr_code",
+        status: "ok",
+        message: `QR Code lido com ${qr_confidence}% confiança`,
+      });
 
       if (qr_at_code && !chave_at) {
         chave_at = qr_at_code;
         chave_at_needs_validation = false;
-        validations.push({ field: "chave_at", status: "ok", message: `Chave AT obtida do QR Code: ${chave_at}` });
+        validations.push({
+          field: "chave_at",
+          status: "ok",
+          message: `Chave AT obtida do QR Code: ${chave_at}`,
+        });
       }
     }
   } catch {
-    validations.push({ field: "qr_code", status: "warning", message: "QR Code: biblioteca jsqr não disponível" });
+    validations.push({
+      field: "qr_code",
+      status: "warning",
+      message: "QR Code: biblioteca jsqr não disponível",
+    });
   }
 
   if (items.length > 0) {
-    validations.push({ field: "resultado", status: "ok", message: `${items.length} artigos extraídos` });
+    validations.push({
+      field: "resultado",
+      status: "ok",
+      message: `${items.length} artigos extraídos`,
+    });
   } else {
-    validations.push({ field: "resultado", status: "error", message: "Nenhum artigo encontrado no documento" });
+    validations.push({
+      field: "resultado",
+      status: "error",
+      message: "Nenhum artigo encontrado no documento",
+    });
   }
+
+  console.log("ARTIGOS ENCONTRADOS:", items);
 
   return {
     tipo_guia,
@@ -473,14 +613,19 @@ export async function extractFromPdf(file: File): Promise<ExtractedData> {
     atcud,
     numero_guia,
     tipo_documento,
-    data_documento,
+    data_documento: normalizarDataPT(data_documento),
     vn_contrib,
     requisicao,
-    data_carga,
+    data_carga: normalizarDataPT(data_carga),
     hora_carga,
     emissor,
     destinatario,
-    transporte,
+    transporte: {
+      ...transporte,
+      carga_data: normalizarDataPT(data_carga),
+      carga_hora: hora_carga,
+      disponibilizacao: normalizarDataPT(disponibilizacao),
+    },
     items,
     qr_at_code,
     qr_raw,

@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { authenticate, setSession, getSession, getNameForPassword } from "@/lib/session";
-import { logUserStore as logUser } from "@/lib/store";
+import { useAuth } from "@/lib/session";
 import { toast } from "sonner";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { Lock, Eye, EyeOff, Shield, Loader2 } from "lucide-react";
@@ -13,39 +12,101 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { user, login } = useAuth();
+
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [cooldownTime, setCooldownTime] = useState<number | null>(null);
+
+  // Carregar tentativas do localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedAttempts = localStorage.getItem("login_attempts");
+      const savedCooldown = localStorage.getItem("login_cooldown_until");
+
+      if (savedAttempts) setAttempts(parseInt(savedAttempts, 10));
+      if (savedCooldown) {
+        const cooldownMs = parseInt(savedCooldown, 10);
+        if (cooldownMs > Date.now()) {
+          setCooldownTime(cooldownMs);
+        } else {
+          localStorage.removeItem("login_cooldown_until");
+        }
+      }
+    }
+  }, []);
+
+  // Timer do lockout
+  useEffect(() => {
+    if (cooldownTime === null) return;
+    const interval = setInterval(() => {
+      const remaining = cooldownTime - Date.now();
+      if (remaining <= 0) {
+        setCooldownTime(null);
+        setAttempts(0);
+        localStorage.removeItem("login_attempts");
+        localStorage.removeItem("login_cooldown_until");
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownTime]);
 
   useEffect(() => {
-    const s = getSession();
-    if (s) navigate({ to: "/dashboard" });
-  }, [navigate]);
+    if (user) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [user, navigate]);
 
   async function handle(e: React.FormEvent) {
     e.preventDefault();
-    if (!password.trim()) {
-      toast.error("Introduza a palavra-passe de acesso.");
+
+    if (cooldownTime && cooldownTime > Date.now()) {
+      const mins = Math.ceil((cooldownTime - Date.now()) / 60000);
+      toast.error(`Muitas tentativas falhadas. Tente novamente em ${mins} minuto(s).`);
+      return;
+    }
+
+    if (!email.trim() || !password.trim()) {
+      toast.error("Introduza o e-mail e a palavra-passe de acesso.");
       return;
     }
 
     setBusy(true);
-    await new Promise((r) => setTimeout(r, 500));
+    try {
+      await login(email.trim(), password.trim());
 
-    if (authenticate(password.trim())) {
-      const userName = getNameForPassword(password.trim());
-      setSession({ name: userName, phone: "", authenticated: true });
-      logUser(userName, "").catch(() => {});
+      // Sucesso
+      setAttempts(0);
+      localStorage.removeItem("login_attempts");
+      localStorage.removeItem("login_cooldown_until");
       toast.success("Acesso autorizado.");
       navigate({ to: "/dashboard" });
-    } else {
-      setAttempts((a) => a + 1);
-      toast.error("Palavra-passe incorreta. Tente novamente.");
+    } catch (err: any) {
+      const nextAttempts = attempts + 1;
+      setAttempts(nextAttempts);
+      localStorage.setItem("login_attempts", String(nextAttempts));
+
+      if (nextAttempts >= 5) {
+        const cooldownUntil = Date.now() + 15 * 60 * 1000; // 15 minutos
+        setCooldownTime(cooldownUntil);
+        localStorage.setItem("login_cooldown_until", String(cooldownUntil));
+        toast.error("Número máximo de tentativas falhadas atingido. Bloqueado por 15 minutos.");
+      } else {
+        const friendlyMessage =
+          err?.message || "E-mail ou palavra-passe incorretos. Tente novamente.";
+        toast.error(friendlyMessage);
+      }
       setPassword("");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
+
+  const isLocked = cooldownTime !== null && cooldownTime > Date.now();
+  const remainingMins = isLocked ? Math.ceil((cooldownTime! - Date.now()) / 60000) : 0;
 
   return (
     <main className="min-h-[100dvh] bg-gradient-to-br from-[#0a1628] via-[#0d1f3c] to-[#0a2540] px-5 py-10 flex flex-col relative overflow-hidden">
@@ -53,9 +114,8 @@ function LoginPage() {
       <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-[#3b82f6]/8 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] bg-[#10b981]/6 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="flex-1 flex items-center justify-center relative z-10">
+      <div className="flex-1 flex items-center justify-center relative z-10 animate-fade-in">
         <div className="w-full max-w-sm">
-
           {/* Logótipo */}
           <div className="flex flex-col items-center text-center mb-8">
             <div className="relative mb-3">
@@ -66,15 +126,11 @@ function LoginPage() {
                 className="relative size-20 rounded-2xl shadow-2xl ring-2 ring-white/10"
               />
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white">
-              Prudêncio
-            </h1>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white">Prudêncio</h1>
             <p className="text-xs text-blue-300/60 mt-1 tracking-widest uppercase">
               Impermeabilizações
             </p>
-            <p className="text-sm text-white/50 mt-3">
-              Sistema de Gestão de Guias de Transporte
-            </p>
+            <p className="text-sm text-white/50 mt-3">Sistema de Gestão de Guias de Transporte</p>
           </div>
 
           {/* Cartão de acesso */}
@@ -85,11 +141,33 @@ function LoginPage() {
               </div>
               <div>
                 <h2 className="text-white font-semibold text-lg leading-tight">Acesso Seguro</h2>
-                <p className="text-white/40 text-xs">Introduza a palavra-passe para continuar</p>
+                <p className="text-white/40 text-xs">
+                  Introduza as suas credenciais para continuar
+                </p>
               </div>
             </div>
 
             <form onSubmit={handle} className="space-y-5">
+              <div>
+                <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+                  E-mail
+                </label>
+                <div className="relative mt-2">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-white/30 font-semibold select-none">
+                    @
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="exemplo@prudencio.pt"
+                    autoComplete="email"
+                    disabled={isLocked || busy}
+                    className="h-13 w-full rounded-xl bg-white/[0.07] border border-white/10 pl-11 pr-4 text-white text-base outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30 transition placeholder:text-white/20 disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
                   Palavra-passe
@@ -102,12 +180,14 @@ function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     autoComplete="current-password"
-                    className="h-13 w-full rounded-xl bg-white/[0.07] border border-white/10 pl-11 pr-12 text-white text-base outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30 transition placeholder:text-white/20"
+                    disabled={isLocked || busy}
+                    className="h-13 w-full rounded-xl bg-white/[0.07] border border-white/10 pl-11 pr-12 text-white text-base outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/30 transition placeholder:text-white/20 disabled:opacity-40"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd(!showPwd)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-white/30 hover:text-white/60 transition"
+                    disabled={isLocked || busy}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-white/30 hover:text-white/60 transition disabled:opacity-40"
                     aria-label={showPwd ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
                   >
                     {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -116,13 +196,15 @@ function LoginPage() {
               </div>
 
               <button
-                disabled={busy}
+                disabled={busy || isLocked}
                 className="w-full h-13 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold text-base hover:from-blue-500 hover:to-blue-400 active:scale-[0.98] transition-all disabled:opacity-60 shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
               >
                 {busy ? (
                   <>
                     <Loader2 className="size-5 animate-spin" /> A verificar...
                   </>
+                ) : isLocked ? (
+                  <>Bloqueado por {remainingMins}m</>
                 ) : (
                   <>
                     <Lock className="size-4" /> Entrar
@@ -130,9 +212,10 @@ function LoginPage() {
                 )}
               </button>
 
-              {attempts > 0 && (
+              {attempts > 0 && !isLocked && (
                 <p className="text-xs text-red-400/80 text-center">
-                  {attempts} tentativa{attempts > 1 ? "s" : ""} falhada{attempts > 1 ? "s" : ""}. Verifique a palavra-passe.
+                  {attempts} tentativa{attempts > 1 ? "s" : ""} falhada{attempts > 1 ? "s" : ""}.
+                  (Bloqueio automático às 5 falhas)
                 </p>
               )}
             </form>

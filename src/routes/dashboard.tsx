@@ -7,9 +7,8 @@ import {
   type Checklist,
   type Obra,
 } from "@/lib/store";
-import { isAuthenticated, clearSession, getSession } from "@/lib/session";
+import { useAuth } from "@/lib/session";
 import { InstallAppButton } from "@/components/InstallAppButton";
-import { ClearAllButton } from "@/components/ClearAllButton";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -22,13 +21,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Upload, CheckCircle2, LogOut, Clock, Shield,
-  FileSpreadsheet, BarChart3, Trash2, Search, FileText,
-  Download as DownloadIcon, Smartphone, Calendar, Hash, Building2,
+  Upload,
+  CheckCircle2,
+  LogOut,
+  Clock,
+  Shield,
+  FileSpreadsheet,
+  BarChart3,
+  Trash2,
+  Search,
+  FileText,
+  Download as DownloadIcon,
+  Smartphone,
+  Calendar,
+  Hash,
+  Building2,
   ChevronRight,
 } from "lucide-react";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
+import { formatarDataParaPT } from "@/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -37,25 +49,39 @@ export const Route = createFileRoute("/dashboard")({
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { user, profile, logout } = useAuth();
   const [items, setItems] = useState<Checklist[]>([]);
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const sessionName = getSession()?.name ?? "";
 
   function loadData() {
     setLoading(true);
     Promise.all([listChecklists(), listObrasStore()])
-      .then(([guias, o]) => { setItems(guias); setObras(o); })
+      .then(([guias, o]) => {
+        setItems(guias);
+        setObras(o);
+      })
+      .catch((err: any) => {
+        console.warn("Erro ao carregar dados do dashboard:", err);
+        let msg = "Não foi possível carregar os dados das guias e obras.";
+        if (err.message && err.message.toLowerCase().includes("permission_denied")) {
+          msg = "Acesso recusado: Não tem permissão para aceder aos dados de guias/obras.";
+        }
+        toast.error(msg);
+      })
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    if (!isAuthenticated()) { navigate({ to: "/" }); return; }
+    if (!user) {
+      navigate({ to: "/" });
+      return;
+    }
     loadData();
-  }, [navigate]);
+  }, [user, navigate]);
 
   async function handleDelete(id: string) {
     setDeleting(true);
@@ -95,7 +121,11 @@ function Dashboard() {
       <header className="bg-gradient-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-8 pb-10 rounded-b-3xl shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/icon-512.png" alt="Prudêncio" className="size-11 rounded-xl shadow ring-2 ring-white/10" />
+            <img
+              src="/icon-512.png"
+              alt="Prudêncio"
+              className="size-11 rounded-xl shadow ring-2 ring-white/10"
+            />
             <div>
               <p className="text-xs uppercase tracking-wider text-primary-foreground/50 flex items-center gap-1">
                 <Shield className="size-3" /> Sistema protegido
@@ -104,7 +134,10 @@ function Dashboard() {
             </div>
           </div>
           <button
-            onClick={() => { clearSession(); navigate({ to: "/" }); }}
+            onClick={async () => {
+              await logout();
+              navigate({ to: "/" });
+            }}
             className="size-10 rounded-full bg-primary-foreground/10 flex items-center justify-center hover:bg-primary-foreground/20 transition"
             aria-label="Sair"
           >
@@ -114,8 +147,17 @@ function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-2 mt-6">
-          <StatCard label="Pendentes" value={pendentes.length} icon={<Clock className="size-4" />} accent />
-          <StatCard label="Validadas" value={concluidas.length} icon={<CheckCircle2 className="size-4" />} />
+          <StatCard
+            label="Pendentes"
+            value={pendentes.length}
+            icon={<Clock className="size-4" />}
+            accent
+          />
+          <StatCard
+            label="Validadas"
+            value={concluidas.length}
+            icon={<CheckCircle2 className="size-4" />}
+          />
           <StatCard label="Total" value={items.length} icon={<FileText className="size-4" />} />
           <StatCard label="Artigos" value={totalArtigos} icon={<BarChart3 className="size-4" />} />
         </div>
@@ -160,18 +202,7 @@ function Dashboard() {
         <InstallAppButton variant="full" />
       </section>
 
-      {/* Limpar Tudo — só Renato */}
-      <section className="px-5 mt-4">
-        <ClearAllButton
-          nomeUtilizador={sessionName}
-          onClearComplete={() =>
-            Promise.all([listChecklists(), listObrasStore()]).then(([g, o]) => {
-              setItems(g);
-              setObras(o);
-            })
-          }
-        />
-      </section>
+      {/* Secção de depuração removida na versão final de produção */}
 
       {/* Histórico */}
       <section className="px-5 mt-8">
@@ -205,8 +236,11 @@ function Dashboard() {
         ) : (
           <div className="space-y-4">
             {filtered.map((c, idx) => {
-              const date = c.data_documento || new Date(c.created_at).toLocaleDateString("pt-PT");
-              const time = new Date(c.created_at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+              const date = formatarDataParaPT(c.data_documento || c.created_at);
+              const time = new Date(c.created_at).toLocaleTimeString("pt-PT", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
               const isTransporte = c.tipo_guia !== "devolucao";
 
               return (
@@ -221,14 +255,20 @@ function Dashboard() {
                     <p className="font-semibold text-sm truncate flex-1 min-w-0">
                       {c.pdf_name || `Guia_${c.numero_guia || "Sem_Numero"}.pdf`}
                     </p>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
-                      isTransporte ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
-                    }`}>
+                    <span
+                      className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
+                        isTransporte ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
                       {isTransporte ? "Transporte" : "Devolução"}
                     </span>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
-                      c.status === "concluida" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                    }`}>
+                    <span
+                      className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
+                        c.status === "concluida"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
                       {c.status === "concluida" ? "Validada" : "Pendente"}
                     </span>
                   </div>
@@ -239,7 +279,8 @@ function Dashboard() {
                   >
                     <div className="p-4 grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="size-4 shrink-0" /> <span className="truncate">{date}</span>
+                        <Calendar className="size-4 shrink-0" />{" "}
+                        <span className="truncate">{date}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock className="size-4 shrink-0" /> <span>{time}</span>
@@ -256,7 +297,9 @@ function Dashboard() {
                       )}
                       <div className="col-span-2 flex items-center gap-2 text-muted-foreground text-xs">
                         <Shield className="size-3.5 shrink-0" />
-                        <span className="font-mono truncate">{c.pdf_metadata?.atcud || c.codigo_at || "—"}</span>
+                        <span className="font-mono truncate">
+                          {c.pdf_metadata?.atcud || c.codigo_at || "—"}
+                        </span>
                       </div>
                     </div>
                   </Link>
@@ -290,7 +333,12 @@ function Dashboard() {
       </section>
 
       {/* AlertDialog — Confirmar apagar */}
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteId(null);
+        }}
+      >
         <AlertDialogContent className="max-w-sm rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -298,7 +346,8 @@ function Dashboard() {
               Apagar Guia
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que deseja apagar este documento? Esta ação não pode ser revertida — o PDF, os dados extraídos e a guia serão eliminados permanentemente.
+              Tem a certeza que deseja apagar este documento? Esta ação não pode ser revertida — o
+              PDF, os dados extraídos e a guia serão eliminados permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -307,9 +356,11 @@ function Dashboard() {
               onClick={() => deleteId && handleDelete(deleteId)}
               className="rounded-xl bg-red-600 hover:bg-red-500 text-white"
             >
-              {deleting
-                ? <span className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                : <Trash2 className="size-4 mr-2" />}
+              {deleting ? (
+                <span className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              ) : (
+                <Trash2 className="size-4 mr-2" />
+              )}
               Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -319,9 +370,21 @@ function Dashboard() {
   );
 }
 
-function StatCard({ label, value, icon, accent }: { label: string; value: number; icon?: React.ReactNode; accent?: boolean }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: number;
+  icon?: React.ReactNode;
+  accent?: boolean;
+}) {
   return (
-    <div className={`rounded-2xl p-3 text-center ${accent ? "bg-secondary text-secondary-foreground" : "bg-primary-foreground/10 text-primary-foreground"}`}>
+    <div
+      className={`rounded-2xl p-3 text-center ${accent ? "bg-secondary text-secondary-foreground" : "bg-primary-foreground/10 text-primary-foreground"}`}
+    >
       <div className="flex items-center justify-center gap-1 mb-1 opacity-70">{icon}</div>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-[10px] uppercase tracking-wider opacity-70">{label}</p>

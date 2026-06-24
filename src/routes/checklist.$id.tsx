@@ -8,7 +8,7 @@ import {
 } from "@/lib/store";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
-import { getSession } from "@/lib/session";
+import { useAuth } from "@/lib/session";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { toast } from "sonner";
 import {
@@ -22,8 +22,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, Send, MessageCircle, Loader2, Download, CheckCircle2,
-  Package, Save, Trash2, FolderOpen, Building2,
+  ArrowLeft,
+  Send,
+  MessageCircle,
+  Loader2,
+  Download,
+  CheckCircle2,
+  Package,
+  Save,
+  Trash2,
+  FolderOpen,
+  Building2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/checklist/$id")({
@@ -34,6 +43,7 @@ export const Route = createFileRoute("/checklist/$id")({
 function GuiaPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [c, setC] = useState<Checklist | null>(null);
   const [resp, setResp] = useState("");
   const [obs, setObs] = useState("");
@@ -42,29 +52,39 @@ function GuiaPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    getChecklist(id).then((data) => {
-      if (!data) {
-        toast.error("Guia não encontrada");
-        navigate({ to: "/dashboard" });
-        return;
-      }
-      setC(data);
-      const s = getSession();
-      if (s) setResp(s.name);
-    }).finally(() => setLoading(false));
-  }, [id, navigate]);
+    if (!user) {
+      navigate({ to: "/" });
+      return;
+    }
+    getChecklist(id)
+      .then((data) => {
+        if (!data) {
+          toast.error("Guia não encontrada");
+          navigate({ to: "/dashboard" });
+          return;
+        }
+        setC(data);
+        if (profile) setResp(profile.name);
+      })
+      .finally(() => setLoading(false));
+  }, [id, user, profile, navigate]);
+
+  if (!user) return null;
 
   function toggle(i: number) {
     if (!c) return;
     setC({
       ...c,
-      items: c.items.map((it, idx) => idx === i ? { ...it, checked: !it.checked } : it),
+      items: c.items.map((it, idx) => (idx === i ? { ...it, checked: !it.checked } : it)),
     });
   }
 
   async function submit() {
     if (!c) return;
-    if (!resp.trim()) { toast.error("Indique o responsável"); return; }
+    if (!resp.trim()) {
+      toast.error("Indique o responsável");
+      return;
+    }
     setBusy(true);
     try {
       await updateChecklist(id, {
@@ -97,7 +117,7 @@ function GuiaPage() {
 
   if (loading || !c) {
     return (
-      <main className="min-h-[100dvh] flex items-center justify-center">
+      <main className="min-h-dvh flex items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
       </main>
     );
@@ -111,17 +131,22 @@ function GuiaPage() {
   const isTransporte = c.tipo_guia !== "devolucao";
 
   return (
-    <main className="min-h-[100dvh] bg-background pb-44">
+    <main className="min-h-dvh bg-background pb-44">
       {/* Header */}
-      <header className="bg-gradient-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-7 rounded-b-3xl shadow-lg">
-        <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition">
+      <header className="bg-linear-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-7 rounded-b-3xl shadow-lg">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition"
+        >
           <ArrowLeft className="size-4" /> Voltar
         </Link>
         <div className="mt-2">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-              isTransporte ? "bg-blue-400/30 text-blue-100" : "bg-orange-400/30 text-orange-100"
-            }`}>
+            <span
+              className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                isTransporte ? "bg-blue-400/30 text-blue-100" : "bg-orange-400/30 text-orange-100"
+              }`}
+            >
               {isTransporte ? "Transporte" : "Devolução"}
             </span>
           </div>
@@ -137,7 +162,12 @@ function GuiaPage() {
         {/* Barra de progresso */}
         <div className="mt-4">
           <div className="flex items-center justify-between text-sm mb-1.5">
-            <span>Progresso: <span className="font-bold">{done}/{c.items.length}</span></span>
+            <span>
+              Progresso:{" "}
+              <span className="font-bold">
+                {done}/{c.items.length}
+              </span>
+            </span>
             <span className="font-bold">{pct}%</span>
           </div>
           <div className="h-2 bg-primary-foreground/15 rounded-full overflow-hidden">
@@ -153,7 +183,8 @@ function GuiaPage() {
       <section className="px-5 mt-4">
         <div className="bg-card rounded-xl border p-3 flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
-            Chave AT: <span className="font-mono font-semibold text-foreground">{c.codigo_at || "—"}</span>
+            Chave AT:{" "}
+            <span className="font-mono font-semibold text-foreground">{c.codigo_at || "—"}</span>
           </span>
           <span className="text-muted-foreground">
             Total: <span className="font-bold text-foreground">{totalQty}</span>
@@ -164,7 +195,9 @@ function GuiaPage() {
       {c.observacoes_renato && (
         <section className="px-5 mt-3">
           <div className="bg-secondary/10 border-l-4 border-secondary rounded-lg p-4">
-            <p className="text-xs uppercase tracking-wider font-semibold text-secondary mb-1">Observações</p>
+            <p className="text-xs uppercase tracking-wider font-semibold text-secondary mb-1">
+              Observações
+            </p>
             <p className="text-sm whitespace-pre-wrap">{c.observacoes_renato}</p>
           </div>
         </section>
@@ -184,7 +217,9 @@ function GuiaPage() {
           >
             <div
               className={`size-7 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
-                it.checked ? "bg-secondary border-secondary text-secondary-foreground" : "border-input"
+                it.checked
+                  ? "bg-secondary border-secondary text-secondary-foreground"
+                  : "border-input"
               }`}
             >
               {it.checked && <CheckCircle2 className="size-5" />}
@@ -205,7 +240,9 @@ function GuiaPage() {
       {/* Responsável + Observações */}
       <section className="px-5 mt-6 space-y-3">
         <div>
-          <label className="text-xs uppercase tracking-wider text-muted-foreground">Responsável</label>
+          <label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Responsável
+          </label>
           <input
             value={resp}
             onChange={(e) => setResp(e.target.value)}
@@ -213,7 +250,9 @@ function GuiaPage() {
           />
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-muted-foreground">Observações</label>
+          <label className="text-xs uppercase tracking-wider text-muted-foreground">
+            Observações
+          </label>
           <textarea
             value={obs}
             onChange={(e) => setObs(e.target.value)}
@@ -236,7 +275,10 @@ function GuiaPage() {
           </button>
 
           <button
-            onClick={() => { exportChecklistToExcel(c); toast.success("Excel exportado"); }}
+            onClick={() => {
+              exportChecklistToExcel(c);
+              toast.success("Excel exportado");
+            }}
             className="h-14 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 text-sm shadow-lg transition hover:bg-blue-500 active:scale-[0.98]"
           >
             <Download className="size-5" /> Excel
@@ -279,7 +321,8 @@ function GuiaPage() {
               Apagar Guia
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tem a certeza que deseja apagar esta guia? Esta ação é irreversível — o documento e os dados extraídos serão eliminados permanentemente.
+              Tem a certeza que deseja apagar esta guia? Esta ação é irreversível — o documento e os
+              dados extraídos serão eliminados permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -288,7 +331,11 @@ function GuiaPage() {
               onClick={handleDelete}
               className="rounded-xl bg-red-600 hover:bg-red-500 text-white"
             >
-              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : <Trash2 className="size-4 mr-2" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="size-4 mr-2" />
+              )}
               Apagar
             </AlertDialogAction>
           </AlertDialogFooter>

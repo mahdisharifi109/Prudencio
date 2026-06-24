@@ -1,25 +1,21 @@
 // Prudêncio GuiaEasy — Service Worker v4
 const CACHE_NAME = "prudencio-v4";
-const PRECACHE_URLS = [
-  "/",
-  "/icon-512.png",
-  "/manifest.webmanifest",
-];
+const PRECACHE_URLS = ["/", "/icon-512.png", "/manifest.webmanifest"];
 
 // Install: pre-cache + skip waiting immediately
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
   self.skipWaiting();
 });
 
 // Activate: clean old caches + claim clients
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
-    )
+    caches
+      .keys()
+      .then((names) =>
+        Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))),
+      ),
   );
   self.clients.claim();
 });
@@ -59,6 +55,6 @@ self.addEventListener("fetch", (event) => {
           }
           return new Response("Offline", { status: 503, statusText: "Offline" });
         });
-      })
+      }),
   );
 });

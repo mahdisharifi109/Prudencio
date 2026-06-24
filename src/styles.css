@@ -126,7 +126,12 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      "Segoe UI",
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -134,34 +139,77 @@
 
 /* ═══ ANIMATIONS ═══ */
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
-  20%, 40%, 60%, 80% { transform: translateX(6px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-6px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(6px);
+  }
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(30px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(100px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-  50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
 }
 
 .animate-fade-in-up {
@@ -187,12 +235,12 @@
 }
 
 .badge-warning {
-  background: oklch(0.90 0.12 85);
-  color: oklch(0.35 0.10 85);
+  background: oklch(0.9 0.12 85);
+  color: oklch(0.35 0.1 85);
 }
 
 .badge-error {
-  background: oklch(0.90 0.12 25);
+  background: oklch(0.9 0.12 25);
   color: oklch(0.35 0.15 25);
 }
 
@@ -206,9 +254,18 @@
 
 /* ═══ PROGRESS BAR ═══ */
 .progress-bar {
-  background: linear-gradient(90deg, oklch(0.72 0.18 150), oklch(0.65 0.20 180));
+  background: linear-gradient(90deg, oklch(0.72 0.18 150), oklch(0.65 0.2 180));
   transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Hide Lovable badge */
-#lovable-badge, .lovable-badge, [id^="lovable"], [class^="lovable"], iframe[src*="lovable"] { display: none !important; opacity: 0 !important; pointer-events: none !important; z-index: -9999 !important; }
+#lovable-badge,
+.lovable-badge,
+[id^="lovable"],
+[class^="lovable"],
+iframe[src*="lovable"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+}

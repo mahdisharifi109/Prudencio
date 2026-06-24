@@ -1,4 +1,4 @@
-import type { Checklist } from "./firebase";
+import type { Checklist } from "./types";
 
 /**
  * Mensagem de WhatsApp — formato profissional, sem emojis.
@@ -28,7 +28,10 @@ export function formatWhatsAppMessage(c: Checklist, pageUrl?: string): string {
 
   // QR Code — texto limpo
   if (pdf.qr_raw) {
-    const formattedQr = pdf.qr_raw.split("*").map((part) => `  - ${part}`).join("\n");
+    const formattedQr = pdf.qr_raw
+      .split("*")
+      .map((part) => `  - ${part}`)
+      .join("\n");
     msg += `*QR Code Detetado:*\n${formattedQr}\n\n`;
   } else if (c.codigo_at) {
     msg += `*QR Code:* Detetado com sucesso\n\n`;

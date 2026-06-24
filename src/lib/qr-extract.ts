@@ -18,10 +18,7 @@ export type QRResult = {
   confidence: number;
 };
 
-export async function extractQRFromPdf(
-  pdfDoc: any,
-  pdfjs: any,
-): Promise<QRResult[]> {
+export async function extractQRFromPdf(pdfDoc: any, pdfjs: any): Promise<QRResult[]> {
   const results: QRResult[] = [];
 
   let jsQR: any;
@@ -72,10 +69,30 @@ export async function extractQRFromPdf(
 
         // Strategy 2: Scan bottom-right corner (most common QR location in Portuguese invoices)
         const regions = [
-          { x: Math.floor(canvas.width * 0.55), y: Math.floor(canvas.height * 0.6), w: Math.floor(canvas.width * 0.45), h: Math.floor(canvas.height * 0.4) },
-          { x: Math.floor(canvas.width * 0.6), y: Math.floor(canvas.height * 0.65), w: Math.floor(canvas.width * 0.4), h: Math.floor(canvas.height * 0.35) },
-          { x: Math.floor(canvas.width * 0.5), y: Math.floor(canvas.height * 0.5), w: Math.floor(canvas.width * 0.5), h: Math.floor(canvas.height * 0.5) },
-          { x: 0, y: Math.floor(canvas.height * 0.6), w: Math.floor(canvas.width * 0.5), h: Math.floor(canvas.height * 0.4) },
+          {
+            x: Math.floor(canvas.width * 0.55),
+            y: Math.floor(canvas.height * 0.6),
+            w: Math.floor(canvas.width * 0.45),
+            h: Math.floor(canvas.height * 0.4),
+          },
+          {
+            x: Math.floor(canvas.width * 0.6),
+            y: Math.floor(canvas.height * 0.65),
+            w: Math.floor(canvas.width * 0.4),
+            h: Math.floor(canvas.height * 0.35),
+          },
+          {
+            x: Math.floor(canvas.width * 0.5),
+            y: Math.floor(canvas.height * 0.5),
+            w: Math.floor(canvas.width * 0.5),
+            h: Math.floor(canvas.height * 0.5),
+          },
+          {
+            x: 0,
+            y: Math.floor(canvas.height * 0.6),
+            w: Math.floor(canvas.width * 0.5),
+            h: Math.floor(canvas.height * 0.4),
+          },
         ];
 
         for (const r of regions) {

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
-import type { Checklist } from "./firebase";
+import type { Checklist } from "./types";
+import { formatarDataParaPT } from "./utils";
 
 /** Exportação Excel profissional — 3 sheets, styled, dados completos */
 export function exportChecklistToExcel(c: Checklist) {
@@ -11,11 +12,21 @@ export function exportChecklistToExcel(c: Checklist) {
 
   // ═══ SHEET 1: ARTIGOS ═══
   const hdr = [
-    "Data", "N. Guia", "Artigo", "Chave AT", "ATCUD", "Descricao",
-    "Quantidade", "Unidade", "Confirmado", "Tipo Documento", "Obra", "Estado",
+    "Data",
+    "N. Guia",
+    "Artigo",
+    "Chave AT",
+    "ATCUD",
+    "Descricao",
+    "Quantidade",
+    "Unidade",
+    "Confirmado",
+    "Tipo Documento",
+    "Obra",
+    "Estado",
   ];
   const rows = c.items.map((i) => [
-    c.data_documento || "",
+    formatarDataParaPT(c.data_documento),
     c.numero_guia || "",
     i.artigo,
     c.codigo_at || "",
@@ -31,8 +42,18 @@ export function exportChecklistToExcel(c: Checklist) {
 
   const wsArt = XLSX.utils.aoa_to_sheet([hdr, ...rows]);
   wsArt["!cols"] = [
-    { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 55 },
-    { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 30 }, { wch: 16 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 55 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 20 },
+    { wch: 30 },
+    { wch: 16 },
   ];
   wsArt["!autofilter"] = { ref: `A1:L${rows.length + 1}` };
 
@@ -78,7 +99,7 @@ export function exportChecklistToExcel(c: Checklist) {
     ["N. Guia de Transporte", c.numero_guia || "—"],
     ["Chave AT", c.codigo_at || "—"],
     ["ATCUD", pdf.atcud || "—"],
-    ["Data do Documento", c.data_documento || "—"],
+    ["Data do Documento", formatarDataParaPT(c.data_documento)],
     ["V/N. Contribuinte", pdf.vn_contrib || "—"],
     ["Obra", c.obra_nome || "—"],
     ["", ""],
@@ -94,12 +115,12 @@ export function exportChecklistToExcel(c: Checklist) {
     ["Morada", pdf.destinatario_morada || "—"],
     ["", ""],
     ["=== TRANSPORTE ===", ""],
-    ["Data de Carga", c.data_carga || "—"],
+    ["Data de Carga", formatarDataParaPT(c.data_carga)],
     ["Hora de Carga", c.hora_carga || "—"],
     ["Local de Carga", pdf.carga_local || "—"],
     ["Local de Descarga", pdf.descarga_local || "—"],
     ["Morada de Descarga", pdf.descarga_morada || "—"],
-    ["Data Disponibilizacao", pdf.disponibilizacao || "—"],
+    ["Data Disponibilizacao", formatarDataParaPT(pdf.disponibilizacao)],
     ["Certificacao Software", pdf.certificacao || "—"],
     ["", ""],
     ["=== ESTATISTICAS ===", ""],
@@ -143,7 +164,10 @@ export function exportChecklistToExcel(c: Checklist) {
       wsRes[lbl].s = { font: { bold: true, name: "Aptos", sz: 10, color: { rgb: "475569" } } };
     }
     if (wsRes[val]) {
-      wsRes[val].s = { font: { name: "Aptos", sz: 10 }, alignment: { wrapText: true, vertical: "top" } };
+      wsRes[val].s = {
+        font: { name: "Aptos", sz: 10 },
+        alignment: { wrapText: true, vertical: "top" },
+      };
     }
   }
   XLSX.utils.book_append_sheet(wb, wsRes, "Resumo");
@@ -154,7 +178,7 @@ export function exportChecklistToExcel(c: Checklist) {
     ["", "", ""],
     ["Data/Hora", "Evento", "Detalhes"],
     [ts, "Exportacao Excel", `${c.items.length} artigos, Qtd Total: ${totalQty.toFixed(2)}`],
-    [ts, "Documento", `${c.numero_guia || "—"} / ${c.data_documento || "—"}`],
+    [ts, "Documento", `${c.numero_guia || "—"} / ${formatarDataParaPT(c.data_documento)}`],
     [ts, "Tipo", tipoDoc],
     [ts, "Chave AT", c.codigo_at || "Nao disponivel"],
     [ts, "QR Code", c.codigo_at ? "Lido" : "Nao lido"],
@@ -168,7 +192,8 @@ export function exportChecklistToExcel(c: Checklist) {
   const wsLog = XLSX.utils.aoa_to_sheet(logRows);
   wsLog["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 55 }];
 
-  if (wsLog["A1"]) wsLog["A1"].s = { font: { bold: true, sz: 14, color: { rgb: "0A2540" }, name: "Aptos" } };
+  if (wsLog["A1"])
+    wsLog["A1"].s = { font: { bold: true, sz: 14, color: { rgb: "0A2540" }, name: "Aptos" } };
   for (let col = 0; col < 3; col++) {
     const addr = XLSX.utils.encode_cell({ r: 2, c: col });
     if (wsLog[addr]) {

@@ -1,14 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  listChecklistsStore,
+  listChecklistsWithItemsStore,
   updateObraStore,
   deleteObraStore,
   type Obra,
   type Checklist,
+  getObraStore,
 } from "@/lib/store";
-import { supabase } from "@/integrations/supabase/client";
-import { db as fbDb } from "@/lib/firebase";
+import { useAuth } from "@/lib/session";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
 import { toast } from "sonner";
@@ -23,9 +23,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, Building2, CheckCircle2, Clock, Upload, Download,
-  Loader2, FileText, Hash, Calendar, User, AlertTriangle,
-  Package, Trash2, ChevronRight, Smartphone,
+  ArrowLeft,
+  Building2,
+  CheckCircle2,
+  Clock,
+  Upload,
+  Download,
+  Loader2,
+  FileText,
+  Hash,
+  Calendar,
+  User,
+  AlertTriangle,
+  Package,
+  Trash2,
+  ChevronRight,
+  Smartphone,
 } from "lucide-react";
 
 export const Route = createFileRoute("/obra/$id")({
@@ -35,28 +48,7 @@ export const Route = createFileRoute("/obra/$id")({
 
 async function fetchObra(id: string): Promise<Obra | null> {
   try {
-    const { data, error } = await supabase
-      .from("obras")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (!error && data) {
-      return {
-        id: data.id,
-        nome: data.nome,
-        descricao: data.descricao ?? undefined,
-        status: data.status as "ativa" | "terminada",
-        created_by: data.created_by ?? undefined,
-        terminated_at: data.terminated_at ? new Date(data.terminated_at).getTime() : undefined,
-        created_at: new Date(data.created_at).getTime(),
-      };
-    }
-  } catch {}
-
-  try {
-    const { get, child, ref } = await import("firebase/database");
-    const snap = await get(child(ref(fbDb), `obras/${id}`));
-    return snap.exists() ? (snap.val() as Obra) : null;
+    return await getObraStore(id);
   } catch {
     return null;
   }
@@ -65,6 +57,7 @@ async function fetchObra(id: string): Promise<Obra | null> {
 function ObraDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [obra, setObra] = useState<Obra | null>(null);
   const [guias, setGuias] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,13 +66,19 @@ function ObraDetailPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!user) {
+      navigate({ to: "/" });
+      return;
+    }
     load();
-  }, [id]);
+  }, [id, user]);
+
+  if (!user) return null;
 
   async function load() {
     setLoading(true);
     try {
-      const [o, g] = await Promise.all([fetchObra(id), listChecklistsStore(id)]);
+      const [o, g] = await Promise.all([fetchObra(id), listChecklistsWithItemsStore(id)]);
       if (!o) {
         toast.error("Obra não encontrada");
         navigate({ to: "/obras" });
@@ -121,7 +120,7 @@ function ObraDetailPage() {
 
   if (loading) {
     return (
-      <main className="min-h-[100dvh] flex items-center justify-center">
+      <main className="min-h-dvh flex items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
       </main>
     );
@@ -135,18 +134,23 @@ function ObraDetailPage() {
   const isTerminada = obra.status === "terminada";
 
   return (
-    <main className="min-h-[100dvh] bg-background pb-28">
+    <main className="min-h-dvh bg-background pb-28">
       {/* Header */}
-      <header className="bg-gradient-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-8 rounded-b-3xl shadow-lg">
-        <Link to="/obras" className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition">
+      <header className="bg-linear-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-8 rounded-b-3xl shadow-lg">
+        <Link
+          to="/obras"
+          className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition"
+        >
           <ArrowLeft className="size-4" /> Obras
         </Link>
 
         <div className="mt-3">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-              isTerminada ? "bg-white/20 text-white/70" : "bg-green-400/30 text-green-100"
-            }`}>
+            <span
+              className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                isTerminada ? "bg-white/20 text-white/70" : "bg-green-400/30 text-green-100"
+              }`}
+            >
               {isTerminada ? "Terminada" : "Em curso"}
             </span>
           </div>
@@ -193,6 +197,16 @@ function ObraDetailPage() {
             </div>
             <ChevronRight className="size-4 text-muted-foreground" />
           </Link>
+        </section>
+      )}
+
+      {/* Resumo de Quantidades */}
+      {guias.length > 0 && (
+        <section className="px-5 mt-6">
+          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Package className="size-3.5" /> Resumo de Quantidades
+          </h2>
+          <ResumQuantidadesTable guias={guias} />
         </section>
       )}
 
@@ -267,17 +281,20 @@ function ObraDetailPage() {
                 <div className="bg-muted/50 rounded-xl p-3">
                   <p className="text-sm font-semibold text-foreground">{obra?.nome}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {guias.length} guia{guias.length !== 1 ? "s" : ""} associada{guias.length !== 1 ? "s" : ""}
+                    {guias.length} guia{guias.length !== 1 ? "s" : ""} associada
+                    {guias.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  A obra passará para o estado "Terminada". Os dados e guias serão preservados para consulta.
+                  A obra passará para o estado "Terminada". Os dados e guias serão preservados para
+                  consulta.
                 </p>
                 {pendentes.length > 0 && (
                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
                     <AlertTriangle className="size-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-800">
-                      Existem <strong>{pendentes.length}</strong> guia{pendentes.length !== 1 ? "s" : ""} por validar.
+                      Existem <strong>{pendentes.length}</strong> guia
+                      {pendentes.length !== 1 ? "s" : ""} por validar.
                     </p>
                   </div>
                 )}
@@ -290,7 +307,11 @@ function ObraDetailPage() {
               onClick={handleTerminarObra}
               className="rounded-xl bg-primary hover:opacity-90"
             >
-              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : <CheckCircle2 className="size-4 mr-2" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="size-4 mr-2" />
+              )}
               Terminar
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -306,7 +327,8 @@ function ObraDetailPage() {
               Apagar Obra
             </AlertDialogTitle>
             <AlertDialogDescription>
-              A obra <strong>"{obra?.nome}"</strong> será apagada. As guias associadas serão desvinculadas mas não eliminadas. Esta ação não pode ser revertida.
+              A obra <strong>"{obra?.nome}"</strong> será apagada. As guias associadas serão
+              desvinculadas mas não eliminadas. Esta ação não pode ser revertida.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -315,13 +337,148 @@ function ObraDetailPage() {
               onClick={handleApagarObra}
               className="rounded-xl bg-red-600 hover:bg-red-500 text-white"
             >
-              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : <Trash2 className="size-4 mr-2" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="size-4 mr-2" />
+              )}
               Apagar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </main>
+  );
+}
+
+function ResumQuantidadesTable({ guias }: { guias: Checklist[] }) {
+  // ─── Cálculo de stock por artigo ───
+  type ArtigoStock = {
+    artigo: string;
+    descricao: string;
+    unidade: string;
+    enviado: number;
+    devolvido: number;
+  };
+
+  const mapa = new Map<string, ArtigoStock>();
+
+  for (const guia of guias) {
+    const isDevolucao = guia.tipo_guia === "devolucao";
+    for (const item of guia.items || []) {
+      const key = (item.artigo || "").trim() || "__SEM_ARTIGO__";
+      const qty = parseFloat((item.quantidade || "0").replace(",", ".")) || 0;
+
+      if (!mapa.has(key)) {
+        mapa.set(key, {
+          artigo: key === "__SEM_ARTIGO__" ? "Sem Artigo" : item.artigo,
+          descricao: item.descricao || "—",
+          unidade: item.unidade || "—",
+          enviado: 0,
+          devolvido: 0,
+        });
+      }
+
+      const entry = mapa.get(key)!;
+      if (isDevolucao) {
+        entry.devolvido += qty;
+      } else {
+        entry.enviado += qty;
+      }
+    }
+  }
+
+  const artigos = Array.from(mapa.values()).sort((a, b) => a.artigo.localeCompare(b.artigo, "pt"));
+
+  // Totais globais
+  const totalEnviado = artigos.reduce((s, a) => s + a.enviado, 0);
+  const totalDevolvido = artigos.reduce((s, a) => s + a.devolvido, 0);
+  const totalSaldo = totalEnviado - totalDevolvido;
+
+  if (artigos.length === 0) return null;
+
+  return (
+    <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 border-b">
+            <tr>
+              <th className="text-left p-3 pl-4 font-semibold text-foreground text-xs">Artigo</th>
+              <th className="text-left p-3 font-semibold text-foreground text-xs hidden sm:table-cell">
+                Descrição
+              </th>
+              <th className="text-right p-3 font-semibold text-blue-600 text-xs">Enviado</th>
+              <th className="text-right p-3 font-semibold text-orange-600 text-xs">Devolvido</th>
+              <th className="text-right p-3 pr-4 font-semibold text-foreground text-xs">Saldo</th>
+              <th className="text-center p-3 font-semibold text-foreground text-xs w-12">Un.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {artigos.map((a, idx) => {
+              const saldo = a.enviado - a.devolvido;
+              return (
+                <tr
+                  key={a.artigo + idx}
+                  className="border-b last:border-b-0 hover:bg-muted/30 transition"
+                >
+                  <td className="p-3 pl-4 font-mono text-xs font-medium text-foreground">
+                    {a.artigo}
+                  </td>
+                  <td className="p-3 text-xs text-muted-foreground truncate max-w-[180px] hidden sm:table-cell">
+                    {a.descricao}
+                  </td>
+                  <td className="text-right p-3 font-bold text-blue-600 tabular-nums">
+                    {a.enviado.toFixed(2)}
+                  </td>
+                  <td className="text-right p-3 font-bold text-orange-600 tabular-nums">
+                    {a.devolvido.toFixed(2)}
+                  </td>
+                  <td
+                    className={`text-right p-3 pr-4 font-bold tabular-nums ${
+                      saldo > 0
+                        ? "text-green-600"
+                        : saldo < 0
+                          ? "text-red-600"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {saldo.toFixed(2)}
+                  </td>
+                  <td className="text-center p-3 text-[10px] uppercase text-muted-foreground font-medium">
+                    {a.unidade}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {/* Linha de totais */}
+          <tfoot className="bg-secondary/10 border-t-2">
+            <tr>
+              <td className="p-3 pl-4 font-bold text-foreground text-xs" colSpan={2}>
+                <span className="hidden sm:inline">
+                  TOTAL ({artigos.length} artigo{artigos.length !== 1 ? "s" : ""})
+                </span>
+                <span className="sm:hidden">TOTAL</span>
+              </td>
+              <td className="text-right p-3 font-bold text-blue-600 tabular-nums">
+                {totalEnviado.toFixed(2)}
+              </td>
+              <td className="text-right p-3 font-bold text-orange-600 tabular-nums">
+                {totalDevolvido.toFixed(2)}
+              </td>
+              <td
+                className={`text-right p-3 pr-4 font-bold text-lg tabular-nums ${
+                  totalSaldo >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {totalSaldo.toFixed(2)}
+              </td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -339,9 +496,11 @@ function GuiaCard({ guia, idx }: { guia: Checklist; idx: number }) {
         <p className="font-semibold text-sm truncate flex-1">
           {guia.pdf_name || `${guia.numero_guia || "Sem número"}`}
         </p>
-        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
-          isTransporte ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
-        }`}>
+        <span
+          className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full shrink-0 ${
+            isTransporte ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+          }`}
+        >
           {isTransporte ? "Transporte" : "Devolução"}
         </span>
       </div>
@@ -364,9 +523,13 @@ function GuiaCard({ guia, idx }: { guia: Checklist; idx: number }) {
             <span className="text-xs">{guia.items?.length || 0} artigos</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-              guia.status === "concluida" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-            }`}>
+            <span
+              className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                guia.status === "concluida"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-yellow-100 text-yellow-700"
+              }`}
+            >
               {guia.status === "concluida" ? "Validada" : "Pendente"}
             </span>
           </div>
@@ -393,7 +556,9 @@ function GuiaCard({ guia, idx }: { guia: Checklist; idx: number }) {
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
   return (
-    <div className={`rounded-2xl p-3 text-center ${accent ? "bg-secondary text-secondary-foreground" : "bg-primary-foreground/10 text-primary-foreground"}`}>
+    <div
+      className={`rounded-2xl p-3 text-center ${accent ? "bg-secondary text-secondary-foreground" : "bg-primary-foreground/10 text-primary-foreground"}`}
+    >
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-[10px] uppercase tracking-wider opacity-70 mt-0.5">{label}</p>
     </div>

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { listObrasStore, createObraStore, type Obra } from "@/lib/store";
-import { isAuthenticated, getSession } from "@/lib/session";
+import { useAuth } from "@/lib/session";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,8 +12,18 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Plus, Building2, CheckCircle2, Clock,
-  Loader2, ChevronRight, Calendar, User,
+  ArrowLeft,
+  Plus,
+  Building2,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  ChevronRight,
+  Calendar,
+  User,
+  Search,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/obras")({
@@ -23,34 +33,48 @@ export const Route = createFileRoute("/obras")({
 
 function ObrasPage() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [obras, setObras] = useState<Obra[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [nomeError, setNomeError] = useState("");
   const [saving, setSaving] = useState(false);
-  const session = getSession();
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    if (!isAuthenticated()) { navigate({ to: "/" }); return; }
+    if (!user) {
+      navigate({ to: "/" });
+      return;
+    }
     load();
-  }, [navigate]);
+  }, [user, navigate]);
+
+  if (!user) return null;
 
   function load() {
     setLoading(true);
-    listObrasStore().then(setObras).finally(() => setLoading(false));
+    listObrasStore()
+      .then(setObras)
+      .finally(() => setLoading(false));
   }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!nome.trim()) { toast.error("Introduza o nome da obra"); return; }
+    if (!nome.trim()) {
+      setNomeError("O nome da obra é obrigatório.");
+      toast.error("Introduza o nome da obra");
+      return;
+    }
+    setNomeError("");
     setSaving(true);
     try {
       await createObraStore({
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         status: "ativa",
-        created_by: session?.name,
+        created_by: profile?.name,
         created_at: Date.now(),
       });
       toast.success("Obra criada com sucesso");
@@ -65,14 +89,18 @@ function ObrasPage() {
     }
   }
 
-  const ativas = obras.filter((o) => o.status === "ativa");
-  const terminadas = obras.filter((o) => o.status === "terminada");
+  const filtered = obras.filter((o) => o.nome.toLowerCase().includes(searchTerm.toLowerCase()));
+  const ativas = filtered.filter((o) => o.status === "ativa");
+  const terminadas = filtered.filter((o) => o.status === "terminada");
 
   return (
     <main className="min-h-[100dvh] bg-background pb-24">
       {/* Header */}
       <header className="bg-gradient-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-8 rounded-b-3xl shadow-lg">
-        <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition"
+        >
           <ArrowLeft className="size-4" /> Voltar
         </Link>
         <div className="mt-3 flex items-center justify-between">
@@ -101,11 +129,48 @@ function ObrasPage() {
         </div>
       </header>
 
+      {/* Barra de Pesquisa */}
+      <div className="px-5 -mt-4 relative z-10">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <input
+            id="search-obras"
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Pesquisar obra por nome..."
+            className="w-full h-12 pl-11 pr-10 rounded-2xl border bg-card shadow-sm text-sm outline-none focus:ring-2 focus:ring-ring transition"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 size-6 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition"
+              aria-label="Limpar pesquisa"
+            >
+              <X className="size-3.5 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Conteúdo */}
-      <section className="px-5 mt-6">
+      <section className="px-5 mt-4">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="size-6 animate-spin text-primary" />
+          </div>
+        ) : filtered.length === 0 && searchTerm ? (
+          <div className="bg-card rounded-2xl border border-dashed p-10 text-center">
+            <Search className="size-10 text-muted-foreground mx-auto opacity-40" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              Nenhuma obra encontrada para "{searchTerm}".
+            </p>
+            <button
+              onClick={() => setSearchTerm("")}
+              className="mt-4 h-10 px-5 rounded-xl bg-muted text-sm font-semibold inline-flex items-center gap-2 hover:bg-muted/80 transition"
+            >
+              <X className="size-4" /> Limpar pesquisa
+            </button>
           </div>
         ) : obras.length === 0 ? (
           <div className="bg-card rounded-2xl border border-dashed p-10 text-center">
@@ -126,7 +191,9 @@ function ObrasPage() {
                   <Clock className="size-3.5" /> Em curso ({ativas.length})
                 </h2>
                 <div className="space-y-3">
-                  {ativas.map((o, idx) => <ObraCard key={o.id} obra={o} idx={idx} />)}
+                  {ativas.map((o, idx) => (
+                    <ObraCard key={o.id} obra={o} idx={idx} />
+                  ))}
                 </div>
               </div>
             )}
@@ -136,7 +203,9 @@ function ObrasPage() {
                   <CheckCircle2 className="size-3.5" /> Terminadas ({terminadas.length})
                 </h2>
                 <div className="space-y-3">
-                  {terminadas.map((o, idx) => <ObraCard key={o.id} obra={o} idx={idx} terminada />)}
+                  {terminadas.map((o, idx) => (
+                    <ObraCard key={o.id} obra={o} idx={idx} terminada />
+                  ))}
                 </div>
               </div>
             )}
@@ -167,11 +236,21 @@ function ObrasPage() {
               <input
                 type="text"
                 value={nome}
-                onChange={(e) => setNome(e.target.value)}
+                onChange={(e) => {
+                  setNome(e.target.value);
+                  if (e.target.value.trim()) setNomeError("");
+                }}
                 placeholder="Ex: Condomínio das Fontainhas"
                 autoFocus
-                className="mt-1.5 h-12 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none focus:ring-2 focus:ring-ring transition"
+                className={`mt-1.5 h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none transition ${
+                  nomeError ? "border-red-500 focus:ring-red-200" : "border-input focus:ring-ring"
+                } focus:ring-2`}
               />
+              {nomeError && (
+                <p className="text-xs text-red-500 mt-1 font-semibold flex items-center gap-1 animate-fade-in">
+                  <AlertTriangle className="size-3.5" /> {nomeError}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
@@ -221,9 +300,11 @@ function ObraCard({ obra, idx, terminada }: { obra: Obra; idx: number; terminada
       style={{ animationDelay: `${idx * 50}ms` }}
     >
       <div className="p-4 flex items-center gap-4">
-        <div className={`size-11 rounded-xl flex items-center justify-center shrink-0 ${
-          terminada ? "bg-muted" : "bg-primary/10"
-        }`}>
+        <div
+          className={`size-11 rounded-xl flex items-center justify-center shrink-0 ${
+            terminada ? "bg-muted" : "bg-primary/10"
+          }`}
+        >
           <Building2 className={`size-5 ${terminada ? "text-muted-foreground" : "text-primary"}`} />
         </div>
         <div className="flex-1 min-w-0">
@@ -243,9 +324,11 @@ function ObraCard({ obra, idx, terminada }: { obra: Obra; idx: number; terminada
           </div>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full ${
-            terminada ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700"
-          }`}>
+          <span
+            className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full ${
+              terminada ? "bg-muted text-muted-foreground" : "bg-green-100 text-green-700"
+            }`}
+          >
             {terminada ? "Terminada" : "Em curso"}
           </span>
           <ChevronRight className="size-4 text-muted-foreground" />

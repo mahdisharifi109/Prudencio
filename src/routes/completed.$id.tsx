@@ -1,9 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getChecklistStore as getChecklist, deleteChecklistStore, type Checklist } from "@/lib/store";
+import {
+  getChecklistStore as getChecklist,
+  deleteChecklistStore,
+  type Checklist,
+} from "@/lib/store";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { useAuth } from "@/lib/session";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,11 +20,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, CheckCircle2, Download, Loader2, MessageCircle,
-  FileSpreadsheet, Calendar, User, Hash, FileText, Package,
-  BarChart3, Trash2, FolderOpen, Building2,
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  Loader2,
+  MessageCircle,
+  FileSpreadsheet,
+  Calendar,
+  User,
+  Hash,
+  FileText,
+  Package,
+  BarChart3,
+  Trash2,
+  FolderOpen,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatarDataParaPT } from "@/lib/utils";
 
 export const Route = createFileRoute("/completed/$id")({
   component: CompletedPage,
@@ -29,11 +47,16 @@ export const Route = createFileRoute("/completed/$id")({
 function CompletedPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [c, setC] = useState<Checklist | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    if (!user) {
+      navigate({ to: "/" });
+      return;
+    }
     getChecklist(id).then((data) => {
       if (!data) {
         toast.error("Guia não encontrada");
@@ -42,7 +65,9 @@ function CompletedPage() {
       }
       setC(data);
     });
-  }, [id, navigate]);
+  }, [id, user, navigate]);
+
+  if (!user) return null;
 
   if (!c) {
     return (
@@ -70,7 +95,7 @@ function CompletedPage() {
         i.quantidade,
         i.unidade,
         i.checked ? "Sim" : "Nao",
-      ].join(";")
+      ].join(";"),
     );
     const csv = [h.join(";"), ...rows].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -99,7 +124,10 @@ function CompletedPage() {
     <main className="min-h-[100dvh] bg-background pb-32">
       {/* Header */}
       <header className="bg-gradient-to-br from-primary via-primary to-[oklch(0.22_0.07_255)] text-primary-foreground px-5 pt-6 pb-8 rounded-b-3xl shadow-lg">
-        <Link to="/dashboard" className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-sm opacity-80 hover:opacity-100 transition"
+        >
           <ArrowLeft className="size-4" /> Dashboard
         </Link>
         <div className="mt-3 flex items-center gap-3">
@@ -108,9 +136,11 @@ function CompletedPage() {
           </div>
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
-                isTransporte ? "bg-blue-400/30 text-blue-100" : "bg-orange-400/30 text-orange-100"
-              }`}>
+              <span
+                className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                  isTransporte ? "bg-blue-400/30 text-blue-100" : "bg-orange-400/30 text-orange-100"
+                }`}
+              >
                 {isTransporte ? "Transporte" : "Devolução"}
               </span>
             </div>
@@ -128,17 +158,33 @@ function CompletedPage() {
       <section className="px-5 mt-5 space-y-4">
         {/* Resumo */}
         <div className="bg-card rounded-2xl border p-4 grid grid-cols-2 gap-3 text-sm animate-fade-in-up">
-          <Field icon={<User className="size-4" />} label="Responsável" value={c.responsavel || "—"} />
+          <Field
+            icon={<User className="size-4" />}
+            label="Responsável"
+            value={c.responsavel || "—"}
+          />
           <Field
             icon={<Calendar className="size-4" />}
             label="Validada em"
             value={c.submitted_at ? new Date(c.submitted_at).toLocaleString("pt-PT") : "—"}
           />
           <Field icon={<Hash className="size-4" />} label="Chave AT" value={c.codigo_at || "—"} />
-          <Field icon={<FileText className="size-4" />} label="N. Guia" value={c.numero_guia || "—"} />
-          <Field icon={<CheckCircle2 className="size-4" />} label="Confirmados" value={`${confirmed}/${c.items.length}`} />
+          <Field
+            icon={<FileText className="size-4" />}
+            label="N. Guia"
+            value={c.numero_guia || "—"}
+          />
+          <Field
+            icon={<CheckCircle2 className="size-4" />}
+            label="Confirmados"
+            value={`${confirmed}/${c.items.length}`}
+          />
           <Field icon={<BarChart3 className="size-4" />} label="Qtd. Total" value={totalQty} />
-          <Field icon={<Calendar className="size-4" />} label="Data Doc." value={c.data_documento || "—"} />
+          <Field
+            icon={<Calendar className="size-4" />}
+            label="Data Doc."
+            value={formatarDataParaPT(c.data_documento)}
+          />
           <Field
             icon={<Calendar className="size-4" />}
             label="Criada em"
@@ -146,9 +192,7 @@ function CompletedPage() {
           />
         </div>
 
-        {c.observacoes_renato && (
-          <Block title="Observações" body={c.observacoes_renato} accent />
-        )}
+        {c.observacoes_renato && <Block title="Observações" body={c.observacoes_renato} accent />}
         {c.observacoes_colaborador && (
           <Block title="Observações do Colaborador" body={c.observacoes_colaborador} />
         )}
@@ -181,7 +225,8 @@ function CompletedPage() {
                   </p>
                 </div>
                 <span className="text-sm font-bold tabular-nums whitespace-nowrap">
-                  {it.quantidade} <span className="text-xs text-muted-foreground">{it.unidade}</span>
+                  {it.quantidade}{" "}
+                  <span className="text-xs text-muted-foreground">{it.unidade}</span>
                 </span>
               </li>
             ))}
@@ -193,7 +238,10 @@ function CompletedPage() {
       <div className="mt-8 mb-6 px-4 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => { exportChecklistToExcel(c); toast.success("Excel exportado"); }}
+            onClick={() => {
+              exportChecklistToExcel(c);
+              toast.success("Excel exportado");
+            }}
             className="h-14 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 text-sm shadow-lg transition hover:bg-blue-500 active:scale-[0.98]"
           >
             <Download className="size-5" /> Excel
@@ -251,9 +299,11 @@ function CompletedPage() {
               onClick={handleDelete}
               className="rounded-xl bg-red-600 hover:bg-red-500 text-white"
             >
-              {deleting
-                ? <Loader2 className="size-4 animate-spin mr-2" />
-                : <Trash2 className="size-4 mr-2" />}
+              {deleting ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="size-4 mr-2" />
+              )}
               Apagar
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -277,7 +327,9 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
 
 function Block({ title, body, accent }: { title: string; body: string; accent?: boolean }) {
   return (
-    <div className={`bg-card rounded-2xl border p-4 ${accent ? "border-l-4 border-l-secondary" : ""}`}>
+    <div
+      className={`bg-card rounded-2xl border p-4 ${accent ? "border-l-4 border-l-secondary" : ""}`}
+    >
       <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{title}</p>
       <p className="text-sm whitespace-pre-wrap">{body}</p>
     </div>
