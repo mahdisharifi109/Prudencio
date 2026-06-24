@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // ═══════════════════════════════════════════════════════════════
-// Criar utilizador na base de dados local
+// Criar utilizador na base de dados Firestore
 // Uso:
 //   node scripts/create-user.mjs --email admin@empresa.pt --name "Admin" --role admin --password SuaPass123
 // ═══════════════════════════════════════════════════════════════
 
 import { randomUUID } from "crypto";
+import admin from "firebase-admin";
 
 const args = process.argv.slice(2);
 function getArg(name) {
@@ -48,107 +49,80 @@ try {
   }
 } catch {}
 
-function resolveClient() {
-  const raw = (process.env.DB_CLIENT || "pg").toLowerCase().trim();
-  const map = {
-    pg: "pg",
-    postgres: "pg",
-    postgresql: "pg",
-    mysql: "mysql2",
-    mysql2: "mysql2",
-    mariadb: "mysql2",
-    mssql: "mssql",
-    tedious: "mssql",
-    sqlserver: "mssql",
-    sqlite: "better-sqlite3",
-    sqlite3: "better-sqlite3",
-    "better-sqlite3": "better-sqlite3",
+// Inicializar Firebase Admin
+const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
+const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+let credentialOptions = null;
+if (serviceAccountEnv) {
+  try {
+    credentialOptions = JSON.parse(serviceAccountEnv);
+  } catch (err) {
+    console.error("Falha ao fazer parse de FIREBASE_SERVICE_ACCOUNT:", err.message);
+  }
+} else if (projectId && clientEmail && privateKey) {
+  credentialOptions = {
+    projectId,
+    clientEmail,
+    privateKey: privateKey.replace(/\\n/g, "\n"),
   };
-  return map[raw] || raw;
 }
 
-async function ensureSchema(db) {
-  const hasUsers = await db.schema.hasTable("users");
-  if (!hasUsers) {
-    await db.schema.createTable("users", (table) => {
-      table.uuid("id").primary();
-      table.text("email").unique().notNullable();
-      table.text("password_hash").notNullable();
-      table.text("name").notNullable();
-      table.text("role").notNullable().defaultTo("operator");
-      table.timestamps(true, true);
+if (credentialOptions) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(credentialOptions),
     });
+    console.log("Firebase Admin SDK inicializado usando credenciais do ficheiro .env.");
+  } catch (err) {
+    console.error("Erro ao inicializar Firebase Admin SDK com credenciais:", err.message);
+    process.exit(1);
   }
-  const hasObras = await db.schema.hasTable("obras");
-  if (!hasObras) {
-    await db.schema.createTable("obras", (table) => {
-      table.uuid("id").primary();
-      table.text("nome").notNullable();
-      table.text("descricao");
-      table.text("status").notNullable().defaultTo("ativa");
-      table.text("created_by");
-      table.timestamp("terminated_at");
-      table.timestamps(true, true);
-    });
+} else {
+  // Try default credentials (e.g. on GCP/Vercel or if configured via GOOGLE_APPLICATION_CREDENTIALS)
+  try {
+    admin.initializeApp();
+    console.log("Firebase Admin SDK inicializado usando credenciais padrao.");
+  } catch (err) {
+    console.error(
+      "Erro ao inicializar Firebase Admin SDK. Por favor, configure FIREBASE_SERVICE_ACCOUNT ou as variaveis de credenciais individuais no .env.",
+      err.message
+    );
+    process.exit(1);
   }
 }
+
+const db = admin.firestore();
 
 async function main() {
   const bcrypt = (await import("bcryptjs")).default;
-  const knex = (await import("knex")).default;
-
-  const client = resolveClient();
-  let dbConfig;
-
-  if (client.includes("sqlite") || client.includes("better-sqlite3")) {
-    dbConfig = {
-      client,
-      connection: {
-        filename: process.env.DB_FILE || "./guideeasy.sqlite",
-      },
-      useNullAsDefault: true,
-    };
-  } else if (process.env.DATABASE_URL) {
-    dbConfig = { client, connection: process.env.DATABASE_URL };
-  } else {
-    dbConfig = {
-      client,
-      connection: {
-        host: process.env.DB_HOST || "localhost",
-        port: Number(process.env.DB_PORT) || 5432,
-        database: process.env.DB_NAME || "guideeasy",
-        user: process.env.DB_USER || "guideeasy",
-        password: process.env.DB_PASSWORD || "changeme",
-      },
-    };
-  }
-
-  const db = knex(dbConfig);
 
   try {
-    // Garantir que as tabelas necessárias existem
-    await ensureSchema(db);
-
+    const usersColl = db.collection("users");
+    
     // Verificar se já existe
-    const existing = await db("users").where("email", email.toLowerCase().trim()).first();
-    if (existing) {
-      console.error(`\n❌ Já existe um utilizador com o email: ${email}\n`);
+    const existingSnap = await usersColl.where("email", "==", email.toLowerCase().trim()).limit(1).get();
+    if (!existingSnap.empty) {
+      console.error(`\n❌ Ja existe um utilizador com o email: ${email}\n`);
       process.exit(1);
     }
 
     const id = randomUUID();
     const password_hash = await bcrypt.hash(password, 12);
 
-    await db("users").insert({
+    await usersColl.doc(id).set({
       id,
       email: email.toLowerCase().trim(),
       password_hash,
       name,
       role,
+      created_at: Date.now(),
     });
 
     console.log(`
-✅ Utilizador criado com sucesso!
+✅ Utilizador criado com sucesso no Firestore!
 
    ID:    ${id}
    Email: ${email}
@@ -158,9 +132,8 @@ async function main() {
   } catch (err) {
     console.error("\n❌ Erro ao criar utilizador:", err.message || err);
     process.exit(1);
-  } finally {
-    await db.destroy();
   }
 }
 
 main();
+
