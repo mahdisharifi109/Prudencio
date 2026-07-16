@@ -32,9 +32,12 @@ function initializeFirebaseAdmin(): admin.firestore.Firestore {
   // Opção 1: JSON completo da Service Account
   if (serviceAccountEnv && serviceAccountEnv.trim().length > 10) {
     try {
-      // Remover aspas simples que envolvem o JSON se existirem
+      // Remover aspas simples ou duplas que envolvem o JSON se existirem
       let jsonStr = serviceAccountEnv.trim();
       if (jsonStr.startsWith("'") && jsonStr.endsWith("'")) {
+        jsonStr = jsonStr.slice(1, -1);
+      }
+      if (jsonStr.startsWith('"') && jsonStr.endsWith('"')) {
         jsonStr = jsonStr.slice(1, -1);
       }
       credentialOptions = JSON.parse(jsonStr);
@@ -42,6 +45,9 @@ function initializeFirebaseAdmin(): admin.firestore.Firestore {
       console.error(
         "[db] Falha ao fazer parse de FIREBASE_SERVICE_ACCOUNT:",
         err.message
+      );
+      throw new Error(
+        `[db] ❌ Falha ao fazer parse de FIREBASE_SERVICE_ACCOUNT: ${err.message}. Certifique-se de que copiou o JSON completo e sem plicas/aspas externas.`
       );
     }
   }
@@ -66,14 +72,18 @@ function initializeFirebaseAdmin(): admin.firestore.Firestore {
         "[db] ❌ Erro ao inicializar Firebase Admin SDK:",
         err.message
       );
-      throw err;
+      throw new Error(
+        `[db] ❌ Erro ao inicializar Firebase Admin SDK com credenciais: ${err.message}`
+      );
     }
   }
 
   // Se não há credenciais, lançar erro claro
   throw new Error(
-    "[db] ❌ FIREBASE_SERVICE_ACCOUNT não está configurado no .env. " +
-      "O servidor não pode arrancar sem credenciais do Firebase Admin SDK."
+    `[db] ❌ FIREBASE_SERVICE_ACCOUNT não está configurado. ` +
+      `Variáveis detetadas: FIREBASE_SERVICE_ACCOUNT=${serviceAccountEnv ? 'definida (tamanho: ' + serviceAccountEnv.length + ')' : 'ausente'}, ` +
+      `FIREBASE_CLIENT_EMAIL=${clientEmail ? 'definida' : 'ausente'}, ` +
+      `FIREBASE_PRIVATE_KEY=${privateKey ? 'definida' : 'ausente'}.`
   );
 }
 
