@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as ObrasRouteImport } from './routes/obras'
+import { Route as FirebaseTestRouteImport } from './routes/firebase-test'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ObraIdRouteImport } from './routes/obra.$id'
@@ -25,6 +26,11 @@ const UploadRoute = UploadRouteImport.update({
 const ObrasRoute = ObrasRouteImport.update({
   id: '/obras',
   path: '/obras',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FirebaseTestRoute = FirebaseTestRouteImport.update({
+  id: '/firebase-test',
+  path: '/firebase-test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -56,6 +62,7 @@ const ChecklistIdRoute = ChecklistIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/firebase-test': typeof FirebaseTestRoute
   '/obras': typeof ObrasRoute
   '/upload': typeof UploadRoute
   '/checklist/$id': typeof ChecklistIdRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/firebase-test': typeof FirebaseTestRoute
   '/obras': typeof ObrasRoute
   '/upload': typeof UploadRoute
   '/checklist/$id': typeof ChecklistIdRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/firebase-test': typeof FirebaseTestRoute
   '/obras': typeof ObrasRoute
   '/upload': typeof UploadRoute
   '/checklist/$id': typeof ChecklistIdRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/firebase-test'
     | '/obras'
     | '/upload'
     | '/checklist/$id'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/firebase-test'
     | '/obras'
     | '/upload'
     | '/checklist/$id'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/firebase-test'
     | '/obras'
     | '/upload'
     | '/checklist/$id'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  FirebaseTestRoute: typeof FirebaseTestRoute
   ObrasRoute: typeof ObrasRoute
   UploadRoute: typeof UploadRoute
   ChecklistIdRoute: typeof ChecklistIdRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/obras'
       fullPath: '/obras'
       preLoaderRoute: typeof ObrasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/firebase-test': {
+      id: '/firebase-test'
+      path: '/firebase-test'
+      fullPath: '/firebase-test'
+      preLoaderRoute: typeof FirebaseTestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  FirebaseTestRoute: FirebaseTestRoute,
   ObrasRoute: ObrasRoute,
   UploadRoute: UploadRoute,
   ChecklistIdRoute: ChecklistIdRoute,

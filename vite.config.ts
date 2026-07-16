@@ -15,6 +15,7 @@ export default defineConfig({
     server: {
       port: 8433,
       strictPort: false,
+      open: true,
     },
     plugins: [
       nitro({

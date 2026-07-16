@@ -9,6 +9,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Checklist, ChecklistItem, Obra, UserProfile, UserRole } from "./types";
 import { randomUUID } from "crypto";
+import type admin from "firebase-admin";
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTES E HELPERS INTERNOS
@@ -183,18 +184,20 @@ export const listObrasFn = createServerFn({ method: "GET" }).handler(async () =>
   const db = getDb();
   const snapshot = await db.collection("obras").orderBy("created_at", "desc").get();
   
-  return snapshot.docs.map((doc) => {
-    const r = doc.data();
-    return {
-      id: r.id,
-      nome: r.nome || "",
-      descricao: r.descricao || undefined,
-      status: (r.status as "ativa" | "terminada") || "ativa",
-      created_by: r.created_by || undefined,
-      terminated_at: r.terminated_at || undefined,
-      created_at: r.created_at || Date.now(),
-    };
-  });
+  return snapshot.docs
+    .filter((doc) => doc.id !== "placeholder")
+    .map((doc) => {
+      const r = doc.data();
+      return {
+        id: r.id,
+        nome: r.nome || "",
+        descricao: r.descricao || undefined,
+        status: (r.status as "ativa" | "terminada") || "ativa",
+        created_by: r.created_by || undefined,
+        terminated_at: r.terminated_at || undefined,
+        created_at: r.created_at || Date.now(),
+      };
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -381,36 +384,38 @@ export const listChecklistsFn = createServerFn({ method: "GET" })
     query = query.orderBy("created_at", "desc");
 
     const snapshot = await query.get();
-    return snapshot.docs.map((doc) => {
-      const r = doc.data();
-      const items = r.items || [];
-      return {
-        id: r.id,
-        codigo_at: r.codigo_at || "",
-        numero_guia: r.numero_guia || "",
-        data_documento: r.data_documento || "",
-        data_carga: r.data_carga || "",
-        hora_carga: r.hora_carga || "",
-        observacoes_renato: r.observacoes_renato || "",
-        status: (r.status as "pendente" | "concluida") || "pendente",
-        created_at: r.created_at || Date.now(),
-        created_by: r.created_by || undefined,
-        responsavel: r.responsavel || undefined,
-        observacoes_colaborador: r.observacoes_colaborador || undefined,
-        submitted_at: r.submitted_at || undefined,
-        obra_id: r.obra_id || undefined,
-        tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
-        pdf_name: r.pdf_name || undefined,
-        pdf_metadata: r.pdf_metadata || undefined,
-        items: items.map((it: any) => ({
-          artigo: it.artigo || "",
-          descricao: it.descricao || "",
-          quantidade: it.quantidade || "",
-          unidade: it.unidade || "",
-          checked: !!it.checked,
-        })),
-      } satisfies Checklist;
-    });
+    return snapshot.docs
+      .filter((doc: admin.firestore.QueryDocumentSnapshot) => doc.id !== "placeholder")
+      .map((doc: admin.firestore.QueryDocumentSnapshot) => {
+        const r = doc.data();
+        const items = r.items || [];
+        return {
+          id: r.id,
+          codigo_at: r.codigo_at || "",
+          numero_guia: r.numero_guia || "",
+          data_documento: r.data_documento || "",
+          data_carga: r.data_carga || "",
+          hora_carga: r.hora_carga || "",
+          observacoes_renato: r.observacoes_renato || "",
+          status: (r.status as "pendente" | "concluida") || "pendente",
+          created_at: r.created_at || Date.now(),
+          created_by: r.created_by || undefined,
+          responsavel: r.responsavel || undefined,
+          observacoes_colaborador: r.observacoes_colaborador || undefined,
+          submitted_at: r.submitted_at || undefined,
+          obra_id: r.obra_id || undefined,
+          tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
+          pdf_name: r.pdf_name || undefined,
+          pdf_metadata: r.pdf_metadata || undefined,
+          items: items.map((it: any) => ({
+            artigo: it.artigo || "",
+            descricao: it.descricao || "",
+            quantidade: it.quantidade || "",
+            unidade: it.unidade || "",
+            checked: !!it.checked,
+          })),
+        } satisfies Checklist;
+      });
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -430,36 +435,38 @@ export const listChecklistsWithItemsFn = createServerFn({ method: "GET" })
       .orderBy("created_at", "desc")
       .get();
 
-    return snapshot.docs.map((doc) => {
-      const r = doc.data();
-      const items = r.items || [];
-      return {
-        id: r.id,
-        codigo_at: r.codigo_at || "",
-        numero_guia: r.numero_guia || "",
-        data_documento: r.data_documento || "",
-        data_carga: r.data_carga || "",
-        hora_carga: r.hora_carga || "",
-        observacoes_renato: r.observacoes_renato || "",
-        status: (r.status as "pendente" | "concluida") || "pendente",
-        created_at: r.created_at || Date.now(),
-        created_by: r.created_by || undefined,
-        responsavel: r.responsavel || undefined,
-        observacoes_colaborador: r.observacoes_colaborador || undefined,
-        submitted_at: r.submitted_at || undefined,
-        obra_id: r.obra_id || undefined,
-        tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
-        pdf_name: r.pdf_name || undefined,
-        pdf_metadata: r.pdf_metadata || undefined,
-        items: items.map((it: any) => ({
-          artigo: it.artigo || "",
-          descricao: it.descricao || "",
-          quantidade: it.quantidade || "",
-          unidade: it.unidade || "",
-          checked: !!it.checked,
-        })),
-      } satisfies Checklist;
-    });
+    return snapshot.docs
+      .filter((doc) => doc.id !== "placeholder")
+      .map((doc) => {
+        const r = doc.data();
+        const items = r.items || [];
+        return {
+          id: r.id,
+          codigo_at: r.codigo_at || "",
+          numero_guia: r.numero_guia || "",
+          data_documento: r.data_documento || "",
+          data_carga: r.data_carga || "",
+          hora_carga: r.hora_carga || "",
+          observacoes_renato: r.observacoes_renato || "",
+          status: (r.status as "pendente" | "concluida") || "pendente",
+          created_at: r.created_at || Date.now(),
+          created_by: r.created_by || undefined,
+          responsavel: r.responsavel || undefined,
+          observacoes_colaborador: r.observacoes_colaborador || undefined,
+          submitted_at: r.submitted_at || undefined,
+          obra_id: r.obra_id || undefined,
+          tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
+          pdf_name: r.pdf_name || undefined,
+          pdf_metadata: r.pdf_metadata || undefined,
+          items: items.map((it: any) => ({
+            artigo: it.artigo || "",
+            descricao: it.descricao || "",
+            quantidade: it.quantidade || "",
+            unidade: it.unidade || "",
+            checked: !!it.checked,
+          })),
+        } satisfies Checklist;
+      });
   });
 
 // ═══════════════════════════════════════════════════════════════

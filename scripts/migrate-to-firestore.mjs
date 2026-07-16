@@ -42,7 +42,7 @@ if (!existsSync(sqliteFilePath)) {
 
 // 3. Inicializar Firebase Admin SDK
 const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
-const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || "prudencio-main";
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
