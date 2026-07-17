@@ -18,10 +18,15 @@ const unusedDrivers = [
   "better-sqlite3",
   "mysql",
   "mysql2",
+  "mariadb",
   "tedious",
   "oracledb",
   "pg-native",
   "pg-query-stream",
+  "oracle",
+  "strong-oracle",
+  "mssql",
+  "sql.js",
 ];
 
 const noopPath = resolve(__dirname, "src/lib/_noop.js");
