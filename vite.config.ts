@@ -21,11 +21,14 @@ const unusedDrivers = [
   "tedious",
   "oracledb",
   "pg-native",
+  "pg-query-stream",
 ];
+
+const noopPath = resolve(__dirname, "src/lib/_noop.js");
 
 const driverAliases: Record<string, string> = {};
 for (const driver of unusedDrivers) {
-  driverAliases[driver] = resolve(__dirname, "src/lib/_noop.js");
+  driverAliases[driver] = noopPath;
 }
 
 // TanStack Start entry — points to our SSR error wrapper.
@@ -35,6 +38,9 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    resolve: {
+      alias: driverAliases,
+    },
     server: {
       port: 8433,
       strictPort: false,
@@ -44,6 +50,9 @@ export default defineConfig({
       nitro({
         preset: "vercel",
         alias: driverAliases,
+        rollupConfig: {
+          external: unusedDrivers,
+        },
       }),
     ],
   },

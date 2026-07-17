@@ -17,6 +17,13 @@ function resolveClient(): string {
     return "pg";
   }
 
+  // In serverless environments (Vercel, etc.), always use pg — sqlite is not available
+  const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY);
+  if (isServerless) {
+    console.warn("[db] Serverless environment detected, forcing pg client");
+    return "pg";
+  }
+
   const raw = (process.env.DB_CLIENT || "pg").toLowerCase().trim();
   const map: Record<string, string> = {
     pg: "pg",
@@ -51,13 +58,22 @@ function buildConfig(): Knex.Config {
   }
 
   // Modo simples: DATABASE_URL ou POSTGRES_URL (string de conexão única)
-  const connectionString =
+  let connectionString =
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_URL_NON_POOLING;
 
   if (connectionString) {
     const isPostgres = client === "pg";
+    if (isPostgres && connectionString.includes("?")) {
+      try {
+        const urlObj = new URL(connectionString);
+        urlObj.search = "";
+        connectionString = urlObj.toString();
+      } catch (e) {
+        console.warn("[db] Falha ao limpar query params da DATABASE_URL:", e);
+      }
+    }
     return {
       client,
       connection: {
