@@ -8,6 +8,15 @@ import { randomUUID } from "crypto";
 
 /** Normaliza o nome do driver para knex */
 function resolveClient(): string {
+  const connectionString =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_URL_NON_POOLING;
+
+  if (connectionString && (connectionString.startsWith("postgres://") || connectionString.startsWith("postgresql://"))) {
+    return "pg";
+  }
+
   const raw = (process.env.DB_CLIENT || "pg").toLowerCase().trim();
   const map: Record<string, string> = {
     pg: "pg",
