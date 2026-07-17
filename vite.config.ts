@@ -37,15 +37,15 @@ for (const driver of unusedDrivers) {
 }
 
 // Custom Rollup plugin that intercepts ALL resolution attempts for unused drivers
-// This handles both static imports AND dynamic require() calls that knex does internally
+// This handles exact imports AND subpath imports like 'mysql2/callback' or 'sqlite3/lib/trace'
 function mockUnusedDriversPlugin() {
   return {
     name: "mock-unused-knex-drivers",
     resolveId(id: string) {
-      // Match exact package names and any subpath imports
-      const baseName = id.split("/")[0];
-      if (unusedDrivers.includes(baseName) || unusedDrivers.includes(id)) {
-        return { id: noopPath, external: false };
+      for (const driver of unusedDrivers) {
+        if (id === driver || id.startsWith(driver + "/")) {
+          return { id: noopPath, external: false };
+        }
       }
       return null;
     },
