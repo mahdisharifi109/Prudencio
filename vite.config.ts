@@ -2,6 +2,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { nitro } from "nitro/vite";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
+import type { Plugin } from "vite";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -11,8 +12,7 @@ if (process.env.VERCEL) {
 
 // Knex dynamically imports ALL database drivers (sqlite3, mysql2, etc.)
 // even if only 'pg' is used. On Vercel, the unused drivers don't exist,
-// causing ERR_MODULE_NOT_FOUND at runtime. We alias them to an empty
-// module so the bundler replaces them with a harmless no-op.
+// causing ERR_MODULE_NOT_FOUND at runtime.
 const unusedDrivers = [
   "sqlite3",
   "better-sqlite3",
@@ -31,20 +31,18 @@ const unusedDrivers = [
 
 const noopPath = resolve(__dirname, "src/lib/_noop.js");
 
-const driverAliases: Record<string, string> = {};
-for (const driver of unusedDrivers) {
-  driverAliases[driver] = noopPath;
-}
-
-// Custom Rollup plugin that intercepts ALL resolution attempts for unused drivers
-// This handles exact imports AND subpath imports like 'mysql2/callback' or 'sqlite3/lib/trace'
-function mockUnusedDriversPlugin() {
+// Custom Rollup plugin that intercepts ALL resolution attempts for unused drivers.
+// Unlike resolve.alias (which does string replacement and breaks subpaths like
+// mysql2/callback → _noop.js/callback), this plugin properly resolves both
+// exact imports AND subpath imports to the noop module.
+function mockUnusedDriversPlugin(): Plugin {
   return {
     name: "mock-unused-knex-drivers",
+    enforce: "pre",
     resolveId(id: string) {
       for (const driver of unusedDrivers) {
         if (id === driver || id.startsWith(driver + "/")) {
-          return { id: noopPath, external: false };
+          return noopPath;
         }
       }
       return null;
@@ -59,20 +57,29 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    resolve: {
-      alias: driverAliases,
-    },
     server: {
       port: 8433,
       strictPort: false,
       open: true,
     },
     plugins: [
+      mockUnusedDriversPlugin(),
       nitro({
         preset: "vercel",
-        alias: driverAliases,
         rollupConfig: {
-          plugins: [mockUnusedDriversPlugin()],
+          plugins: [
+            {
+              name: "mock-unused-knex-drivers-nitro",
+              resolveId(id: string) {
+                for (const driver of unusedDrivers) {
+                  if (id === driver || id.startsWith(driver + "/")) {
+                    return { id: noopPath, external: false };
+                  }
+                }
+                return null;
+              },
+            },
+          ],
         },
       }),
     ],
