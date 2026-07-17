@@ -31,6 +31,22 @@ for (const driver of unusedDrivers) {
   driverAliases[driver] = noopPath;
 }
 
+// Custom Rollup plugin that intercepts ALL resolution attempts for unused drivers
+// This handles both static imports AND dynamic require() calls that knex does internally
+function mockUnusedDriversPlugin() {
+  return {
+    name: "mock-unused-knex-drivers",
+    resolveId(id: string) {
+      // Match exact package names and any subpath imports
+      const baseName = id.split("/")[0];
+      if (unusedDrivers.includes(baseName) || unusedDrivers.includes(id)) {
+        return { id: noopPath, external: false };
+      }
+      return null;
+    },
+  };
+}
+
 // TanStack Start entry — points to our SSR error wrapper.
 export default defineConfig({
   cloudflare: false,
@@ -51,7 +67,7 @@ export default defineConfig({
         preset: "vercel",
         alias: driverAliases,
         rollupConfig: {
-          external: unusedDrivers,
+          plugins: [mockUnusedDriversPlugin()],
         },
       }),
     ],
