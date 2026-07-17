@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// ─── Server Functions (Firestore Edition) ───────────────────────────
+// ─── Server Functions ────────────────────────────────────────────────
 // Todas as operações de autenticação e CRUD executadas no servidor.
 // Estas funções são chamadas via RPC pelo TanStack Start — o código
 // dentro dos handlers nunca chega ao browser.
 //
-// A conexão à BD usa o Firebase Admin SDK (firestore) no servidor.
+// A conexão à BD é carregada dinamicamente (import()) para garantir
+// que o código server-only (knex, bcrypt, jwt) não é incluído no
+// bundle do cliente.
 
 import { createServerFn } from "@tanstack/react-start";
-import type { Checklist, ChecklistItem, Obra, UserProfile, UserRole } from "./types";
-import { randomUUID } from "crypto";
-import type admin from "firebase-admin";
+import type { Checklist, ChecklistItem, Obra, UserProfile, UserRole, PdfMetadata } from "./types";
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTES E HELPERS INTERNOS
@@ -91,6 +91,53 @@ async function clearAuthCookie(): Promise<void> {
   }
 }
 
+// ─── Row mappers ─────────────────────────────────────────────────────
+
+function rowToObra(r: Record<string, any>): Obra {
+  return {
+    id: r.id,
+    nome: r.nome ?? "",
+    descricao: r.descricao ?? undefined,
+    status: (r.status as "ativa" | "terminada") ?? "ativa",
+    created_by: r.created_by ?? undefined,
+    terminated_at: r.terminated_at ? new Date(r.terminated_at).getTime() : undefined,
+    created_at: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+
+function rowToChecklist(r: Record<string, any>, items: any[], obra_nome?: string): Checklist {
+  return {
+    id: r.id,
+    codigo_at: r.codigo_at ?? "",
+    numero_guia: r.numero_guia ?? "",
+    data_documento: r.data_documento ?? "",
+    data_carga: r.data_carga ?? "",
+    hora_carga: r.hora_carga ?? "",
+    observacoes_renato: r.observacoes_renato ?? "",
+    status: (r.status as "pendente" | "concluida") ?? "pendente",
+    created_at: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    created_by: r.created_by ?? undefined,
+    responsavel: r.responsavel ?? undefined,
+    observacoes_colaborador: r.observacoes_colaborador ?? undefined,
+    submitted_at: r.submitted_at ? new Date(r.submitted_at).getTime() : undefined,
+    obra_id: r.obra_id ?? undefined,
+    obra_nome: obra_nome ?? undefined,
+    tipo_guia: (r.tipo_guia as "transporte" | "devolucao") ?? "transporte",
+    pdf_name: r.pdf_name ?? undefined,
+    pdf_metadata:
+      typeof r.pdf_metadata === "string"
+        ? JSON.parse(r.pdf_metadata)
+        : (r.pdf_metadata ?? undefined),
+    items: items.map((it) => ({
+      artigo: it.artigo ?? "",
+      descricao: it.descricao ?? "",
+      quantidade: it.quantidade ?? "",
+      unidade: it.unidade ?? "",
+      checked: !!it.checked,
+    })),
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTENTICAÇÃO
 // ═══════════════════════════════════════════════════════════════
@@ -104,13 +151,9 @@ export const loginFn = createServerFn({ method: "POST" })
       const jwt = (await import("jsonwebtoken")).default;
 
       const db = getDb();
-      const usersColl = db.collection("users");
-      const userSnap = await usersColl.where("email", "==", data.email.toLowerCase().trim()).limit(1).get();
+      const user = await db("users").where("email", data.email.toLowerCase().trim()).first();
 
-      if (userSnap.empty) throw new Error("Email ou password incorretos");
-
-      const userDoc = userSnap.docs[0];
-      const user = userDoc.data();
+      if (!user) throw new Error("Email ou password incorretos");
 
       const valid = await bcrypt.compare(data.password, user.password_hash);
       if (!valid) throw new Error("Email ou password incorretos");
@@ -161,15 +204,13 @@ export const createObraFn = createServerFn({ method: "POST" })
     await requireSession();
     const { getDb } = await import("./db.server");
     const db = getDb();
-    const id = randomUUID();
-    
-    await db.collection("obras").doc(id).set({
+    const id = crypto.randomUUID();
+    await db("obras").insert({
       id,
       nome: data.nome,
       descricao: data.descricao || null,
       status: data.status || "ativa",
       created_by: data.created_by || null,
-      created_at: Date.now(),
     });
     return id;
   });
@@ -182,22 +223,8 @@ export const listObrasFn = createServerFn({ method: "GET" }).handler(async () =>
   await requireSession();
   const { getDb } = await import("./db.server");
   const db = getDb();
-  const snapshot = await db.collection("obras").orderBy("created_at", "desc").get();
-  
-  return snapshot.docs
-    .filter((doc) => doc.id !== "placeholder")
-    .map((doc) => {
-      const r = doc.data();
-      return {
-        id: r.id,
-        nome: r.nome || "",
-        descricao: r.descricao || undefined,
-        status: (r.status as "ativa" | "terminada") || "ativa",
-        created_by: r.created_by || undefined,
-        terminated_at: r.terminated_at || undefined,
-        created_at: r.created_at || Date.now(),
-      };
-    });
+  const rows = await db("obras").select("*").orderBy("created_at", "desc");
+  return rows.map(rowToObra);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -210,19 +237,8 @@ export const getObraFn = createServerFn({ method: "GET" })
     await requireSession();
     const { getDb } = await import("./db.server");
     const db = getDb();
-    const doc = await db.collection("obras").doc(data.id).get();
-    
-    if (!doc.exists) return null;
-    const r = doc.data()!;
-    return {
-      id: r.id,
-      nome: r.nome || "",
-      descricao: r.descricao || undefined,
-      status: (r.status as "ativa" | "terminada") || "ativa",
-      created_by: r.created_by || undefined,
-      terminated_at: r.terminated_at || undefined,
-      created_at: r.created_at || Date.now(),
-    };
+    const row = await db("obras").where("id", data.id).first();
+    return row ? rowToObra(row) : null;
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -250,10 +266,13 @@ export const updateObraFn = createServerFn({ method: "POST" })
     if (data.patch.status !== undefined) upd.status = data.patch.status;
     if (data.patch.nome !== undefined) upd.nome = data.patch.nome;
     if (data.patch.descricao !== undefined) upd.descricao = data.patch.descricao;
-    if (data.patch.terminated_at !== undefined) upd.terminated_at = data.patch.terminated_at || null;
+    if (data.patch.terminated_at !== undefined)
+      upd.terminated_at = data.patch.terminated_at
+        ? new Date(data.patch.terminated_at).toISOString()
+        : null;
 
     if (Object.keys(upd).length) {
-      await db.collection("obras").doc(data.id).update(upd);
+      await db("obras").where("id", data.id).update(upd);
     }
   });
 
@@ -267,7 +286,7 @@ export const deleteObraFn = createServerFn({ method: "POST" })
     await requireSession();
     const { getDb } = await import("./db.server");
     const db = getDb();
-    await db.collection("obras").doc(data.id).delete();
+    await db("obras").where("id", data.id).delete();
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -281,18 +300,9 @@ export const createChecklistFn = createServerFn({ method: "POST" })
     const { getDb } = await import("./db.server");
     const db = getDb();
     const c = data.checklist;
-    const id = randomUUID();
+    const id = crypto.randomUUID();
 
-    const items = c.items?.map((it, idx) => ({
-      artigo: it.artigo || "",
-      descricao: it.descricao || "",
-      quantidade: it.quantidade || "",
-      unidade: it.unidade || "",
-      checked: !!it.checked,
-      position: idx,
-    })) || [];
-
-    await db.collection("checklists").doc(id).set({
+    await db("checklists").insert({
       id,
       codigo_at: c.codigo_at || null,
       numero_guia: c.numero_guia || null,
@@ -300,15 +310,27 @@ export const createChecklistFn = createServerFn({ method: "POST" })
       data_carga: c.data_carga || null,
       hora_carga: c.hora_carga || null,
       observacoes_renato: c.observacoes_renato || null,
-      status: c.status || "pendente",
+      status: c.status,
       created_by: c.created_by || null,
       obra_id: c.obra_id || null,
       tipo_guia: c.tipo_guia || "transporte",
       pdf_name: c.pdf_name || null,
-      pdf_metadata: c.pdf_metadata || null,
-      created_at: Date.now(),
-      items,
+      pdf_metadata: c.pdf_metadata ? JSON.stringify(c.pdf_metadata) : null,
     });
+
+    if (c.items?.length) {
+      const itemRows = c.items.map((it, idx) => ({
+        id: crypto.randomUUID(),
+        checklist_id: id,
+        artigo: it.artigo,
+        descricao: it.descricao,
+        quantidade: it.quantidade,
+        unidade: it.unidade,
+        checked: !!it.checked,
+        position: idx,
+      }));
+      await db("checklist_items").insert(itemRows);
+    }
 
     return id;
   });
@@ -324,46 +346,20 @@ export const getChecklistFn = createServerFn({ method: "GET" })
     const { getDb } = await import("./db.server");
     const db = getDb();
 
-    const doc = await db.collection("checklists").doc(data.id).get();
-    if (!doc.exists) return null;
-    const r = doc.data()!;
+    const row = await db("checklists").where("id", data.id).first();
+    if (!row) return null;
+
+    const items = await db("checklist_items")
+      .where("checklist_id", data.id)
+      .orderBy("position", "asc");
 
     let obra_nome: string | undefined;
-    if (r.obra_id) {
-      const obraDoc = await db.collection("obras").doc(r.obra_id).get();
-      if (obraDoc.exists) {
-        obra_nome = obraDoc.data()?.nome;
-      }
+    if (row.obra_id) {
+      const obra = await db("obras").where("id", row.obra_id).select("nome").first();
+      obra_nome = obra?.nome;
     }
 
-    const items = r.items || [];
-    return {
-      id: r.id,
-      codigo_at: r.codigo_at || "",
-      numero_guia: r.numero_guia || "",
-      data_documento: r.data_documento || "",
-      data_carga: r.data_carga || "",
-      hora_carga: r.hora_carga || "",
-      observacoes_renato: r.observacoes_renato || "",
-      status: (r.status as "pendente" | "concluida") || "pendente",
-      created_at: r.created_at || Date.now(),
-      created_by: r.created_by || undefined,
-      responsavel: r.responsavel || undefined,
-      observacoes_colaborador: r.observacoes_colaborador || undefined,
-      submitted_at: r.submitted_at || undefined,
-      obra_id: r.obra_id || undefined,
-      obra_nome,
-      tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
-      pdf_name: r.pdf_name || undefined,
-      pdf_metadata: r.pdf_metadata || undefined,
-      items: items.map((it: any) => ({
-        artigo: it.artigo || "",
-        descricao: it.descricao || "",
-        quantidade: it.quantidade || "",
-        unidade: it.unidade || "",
-        checked: !!it.checked,
-      })),
-    } satisfies Checklist;
+    return rowToChecklist(row, items, obra_nome);
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -377,45 +373,11 @@ export const listChecklistsFn = createServerFn({ method: "GET" })
     const { getDb } = await import("./db.server");
     const db = getDb();
 
-    let query: admin.firestore.Query = db.collection("checklists");
-    if (data?.obraId) {
-      query = query.where("obra_id", "==", data.obraId);
-    }
-    query = query.orderBy("created_at", "desc");
+    let query = db("checklists").select("*").orderBy("created_at", "desc");
+    if (data?.obraId) query = query.where("obra_id", data.obraId);
 
-    const snapshot = await query.get();
-    return snapshot.docs
-      .filter((doc: admin.firestore.QueryDocumentSnapshot) => doc.id !== "placeholder")
-      .map((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const r = doc.data();
-        const items = r.items || [];
-        return {
-          id: r.id,
-          codigo_at: r.codigo_at || "",
-          numero_guia: r.numero_guia || "",
-          data_documento: r.data_documento || "",
-          data_carga: r.data_carga || "",
-          hora_carga: r.hora_carga || "",
-          observacoes_renato: r.observacoes_renato || "",
-          status: (r.status as "pendente" | "concluida") || "pendente",
-          created_at: r.created_at || Date.now(),
-          created_by: r.created_by || undefined,
-          responsavel: r.responsavel || undefined,
-          observacoes_colaborador: r.observacoes_colaborador || undefined,
-          submitted_at: r.submitted_at || undefined,
-          obra_id: r.obra_id || undefined,
-          tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
-          pdf_name: r.pdf_name || undefined,
-          pdf_metadata: r.pdf_metadata || undefined,
-          items: items.map((it: any) => ({
-            artigo: it.artigo || "",
-            descricao: it.descricao || "",
-            quantidade: it.quantidade || "",
-            unidade: it.unidade || "",
-            checked: !!it.checked,
-          })),
-        } satisfies Checklist;
-      });
+    const rows = await query;
+    return rows.map((r: any) => rowToChecklist(r, []));
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -429,44 +391,26 @@ export const listChecklistsWithItemsFn = createServerFn({ method: "GET" })
     const { getDb } = await import("./db.server");
     const db = getDb();
 
-    const snapshot = await db
-      .collection("checklists")
-      .where("obra_id", "==", data.obraId)
-      .orderBy("created_at", "desc")
-      .get();
+    const rows = await db("checklists")
+      .where("obra_id", data.obraId)
+      .select("*")
+      .orderBy("created_at", "desc");
 
-    return snapshot.docs
-      .filter((doc) => doc.id !== "placeholder")
-      .map((doc) => {
-        const r = doc.data();
-        const items = r.items || [];
-        return {
-          id: r.id,
-          codigo_at: r.codigo_at || "",
-          numero_guia: r.numero_guia || "",
-          data_documento: r.data_documento || "",
-          data_carga: r.data_carga || "",
-          hora_carga: r.hora_carga || "",
-          observacoes_renato: r.observacoes_renato || "",
-          status: (r.status as "pendente" | "concluida") || "pendente",
-          created_at: r.created_at || Date.now(),
-          created_by: r.created_by || undefined,
-          responsavel: r.responsavel || undefined,
-          observacoes_colaborador: r.observacoes_colaborador || undefined,
-          submitted_at: r.submitted_at || undefined,
-          obra_id: r.obra_id || undefined,
-          tipo_guia: (r.tipo_guia as "transporte" | "devolucao") || "transporte",
-          pdf_name: r.pdf_name || undefined,
-          pdf_metadata: r.pdf_metadata || undefined,
-          items: items.map((it: any) => ({
-            artigo: it.artigo || "",
-            descricao: it.descricao || "",
-            quantidade: it.quantidade || "",
-            unidade: it.unidade || "",
-            checked: !!it.checked,
-          })),
-        } satisfies Checklist;
-      });
+    if (!rows.length) return [] as Checklist[];
+
+    const ids = rows.map((r: any) => r.id);
+    const allItems = await db("checklist_items")
+      .whereIn("checklist_id", ids)
+      .orderBy("position", "asc");
+
+    const itemsByChecklist = new Map<string, any[]>();
+    for (const it of allItems) {
+      const arr = itemsByChecklist.get(it.checklist_id) ?? [];
+      arr.push(it);
+      itemsByChecklist.set(it.checklist_id, arr);
+    }
+
+    return rows.map((r: any) => rowToChecklist(r, itemsByChecklist.get(r.id) ?? []));
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -480,13 +424,7 @@ export const updateChecklistFn = createServerFn({ method: "POST" })
     const { getDb } = await import("./db.server");
     const db = getDb();
 
-    const docRef = db.collection("checklists").doc(data.id);
-    const doc = await docRef.get();
-    if (!doc.exists) throw new Error("Checklist não encontrada");
-
-    const r = doc.data()!;
     const upd: Record<string, any> = {};
-
     if (data.patch.status !== undefined) upd.status = data.patch.status;
     if (data.patch.responsavel !== undefined) upd.responsavel = data.patch.responsavel ?? null;
     if (data.patch.observacoes_colaborador !== undefined)
@@ -494,22 +432,22 @@ export const updateChecklistFn = createServerFn({ method: "POST" })
     if (data.patch.observacoes_renato !== undefined)
       upd.observacoes_renato = data.patch.observacoes_renato ?? null;
     if (data.patch.submitted_at !== undefined)
-      upd.submitted_at = data.patch.submitted_at || null;
-
-    if (data.patch.items) {
-      const currentItems = r.items || [];
-      const updatedItems = currentItems.map((item: any, idx: number) => {
-        const patchItem = data.patch.items?.[idx];
-        if (patchItem && patchItem.checked !== undefined) {
-          return { ...item, checked: !!patchItem.checked };
-        }
-        return item;
-      });
-      upd.items = updatedItems;
-    }
+      upd.submitted_at = data.patch.submitted_at
+        ? new Date(data.patch.submitted_at).toISOString()
+        : null;
 
     if (Object.keys(upd).length) {
-      await docRef.update(upd);
+      await db("checklists").where("id", data.id).update(upd);
+    }
+
+    if (data.patch.items) {
+      for (let i = 0; i < data.patch.items.length; i++) {
+        const it = data.patch.items[i];
+        await db("checklist_items")
+          .where("checklist_id", data.id)
+          .where("position", i)
+          .update({ checked: !!it.checked });
+      }
     }
   });
 
@@ -523,7 +461,8 @@ export const deleteChecklistFn = createServerFn({ method: "POST" })
     await requireSession();
     const { getDb } = await import("./db.server");
     const db = getDb();
-    await db.collection("checklists").doc(data.id).delete();
+    await db("checklist_items").where("checklist_id", data.id).delete();
+    await db("checklists").where("id", data.id).delete();
   });
 
 // ═══════════════════════════════════════════════════════════════
@@ -536,17 +475,8 @@ export const deleteAllChecklistsFn = createServerFn({
   await requireSession();
   const { getDb } = await import("./db.server");
   const db = getDb();
-
-  const collRef = db.collection("checklists");
-  const snapshot = await collRef.limit(500).get();
-  
-  if (snapshot.empty) return;
-  
-  const batch = db.batch();
-  snapshot.docs.forEach((doc) => {
-    batch.delete(doc.ref);
-  });
-  await batch.commit();
+  await db("checklist_items").delete();
+  await db("checklists").delete();
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -559,12 +489,9 @@ export const logUserFn = createServerFn({ method: "POST" })
     await requireSession();
     const { getDb } = await import("./db.server");
     const db = getDb();
-    const id = randomUUID();
-    
-    await db.collection("app_users").doc(id).set({
-      id,
+    await db("app_users").insert({
+      id: crypto.randomUUID(),
       name: data.name,
       phone: data.phone || null,
-      created_at: Date.now(),
     });
   });
