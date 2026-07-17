@@ -18,7 +18,6 @@ import {
   deleteObraFn,
   logUserFn,
 } from "./server-fns";
-import * as fb from "./firebase";
 import type { Checklist, ChecklistItem, PdfMetadata, Obra } from "./types";
 
 export type { Checklist, ChecklistItem, PdfMetadata, Obra };
@@ -27,10 +26,17 @@ function useFirebase(): boolean {
   return import.meta.env.VITE_USE_FIREBASE === "true";
 }
 
+// Lazy import do Firebase — só carrega quando VITE_USE_FIREBASE=true
+// Evita o crash "Firebase: Error (auth/invalid-api-key)" quando o Firebase não está configurado
+async function getFb() {
+  return import("./firebase");
+}
+
 // ─── OBRAS — CREATE ──────────────────────────────────────────────────
 
 export async function createObraStore(o: Omit<Obra, "id">): Promise<string> {
   if (useFirebase()) {
+    const fb = await getFb();
     return fb.createObra(o);
   }
   return createObraFn({
@@ -47,6 +53,7 @@ export async function createObraStore(o: Omit<Obra, "id">): Promise<string> {
 
 export async function listObrasStore(): Promise<Obra[]> {
   if (useFirebase()) {
+    const fb = await getFb();
     return fb.listObras();
   }
   return listObrasFn();
@@ -56,6 +63,7 @@ export async function listObrasStore(): Promise<Obra[]> {
 
 export async function getObraStore(id: string): Promise<Obra | null> {
   if (useFirebase()) {
+    const fb = await getFb();
     return fb.getObra(id);
   }
   return getObraFn({ data: { id } });
@@ -65,6 +73,7 @@ export async function getObraStore(id: string): Promise<Obra | null> {
 
 export async function updateObraStore(id: string, patch: Partial<Obra>): Promise<void> {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.updateObra(id, patch);
     return;
   }
@@ -75,6 +84,7 @@ export async function updateObraStore(id: string, patch: Partial<Obra>): Promise
 
 export async function deleteObraStore(id: string): Promise<void> {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.deleteObra(id);
     return;
   }
@@ -85,6 +95,7 @@ export async function deleteObraStore(id: string): Promise<void> {
 
 export async function createChecklistStore(c: Omit<Checklist, "id">): Promise<string> {
   if (useFirebase()) {
+    const fb = await getFb();
     return fb.createChecklist(c);
   }
   return createChecklistFn({ data: { checklist: c } });
@@ -94,6 +105,7 @@ export async function createChecklistStore(c: Omit<Checklist, "id">): Promise<st
 
 export async function getChecklistStore(id: string): Promise<Checklist | null> {
   if (useFirebase()) {
+    const fb = await getFb();
     return fb.getChecklist(id);
   }
   return getChecklistFn({ data: { id } });
@@ -103,6 +115,7 @@ export async function getChecklistStore(id: string): Promise<Checklist | null> {
 
 export async function listChecklistsStore(obraId?: string): Promise<Checklist[]> {
   if (useFirebase()) {
+    const fb = await getFb();
     const all = await fb.listChecklists();
     return obraId ? all.filter((c) => c.obra_id === obraId) : all;
   }
@@ -113,6 +126,7 @@ export async function listChecklistsStore(obraId?: string): Promise<Checklist[]>
 
 export async function listChecklistsWithItemsStore(obraId: string): Promise<Checklist[]> {
   if (useFirebase()) {
+    const fb = await getFb();
     const all = await fb.listChecklists();
     return all.filter((c) => c.obra_id === obraId);
   }
@@ -123,6 +137,7 @@ export async function listChecklistsWithItemsStore(obraId: string): Promise<Chec
 
 export async function updateChecklistStore(id: string, patch: Partial<Checklist>) {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.updateChecklist(id, patch);
     return;
   }
@@ -133,6 +148,7 @@ export async function updateChecklistStore(id: string, patch: Partial<Checklist>
 
 export async function deleteChecklistStore(id: string): Promise<void> {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.deleteChecklist(id);
     return;
   }
@@ -143,6 +159,7 @@ export async function deleteChecklistStore(id: string): Promise<void> {
 
 export async function deleteAllChecklistsStore(): Promise<void> {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.deleteAllChecklists();
     return;
   }
@@ -153,6 +170,7 @@ export async function deleteAllChecklistsStore(): Promise<void> {
 
 export async function logUserStore(name: string, phone: string): Promise<void> {
   if (useFirebase()) {
+    const fb = await getFb();
     await fb.logUser(name, phone);
     return;
   }
