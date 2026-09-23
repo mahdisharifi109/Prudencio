@@ -1,0 +1,20 @@
+# ═══════════════════════════════════════════════════════════════
+# GuidEasy Logistics — Docker Compose (Neon PostgreSQL Edition)
+# Apenas a aplicação — dados armazenados no Neon PostgreSQL.
+#   docker compose up -d
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no ficheiro .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no ficheiro .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@prudencio.pt}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador}
+      NODE_ENV: production
+      PORT: 3000
