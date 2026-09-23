@@ -1,5 +1,7 @@
-# Meu-Projeto
+# Prudencio
 
-Repositório contendo o projeto completo:
-- `guideeasy-logistics`: Aplicação principal atualizada (Vite, React, Tailwind, Drizzle ORM, Neon PostgreSQL)
-- `Prudencio-main`: Versão base anterior do projeto
+Aplicação de gestão de guias de transporte.
+
+O código da aplicação está em `guideeasy-logistics` e usa Vite, React, Tailwind, TanStack Start, Drizzle ORM e Neon PostgreSQL.
+
+Para publicar na Vercel, configure `guideeasy-logistics` como **Root Directory** e use `npm run build` como comando de build.
