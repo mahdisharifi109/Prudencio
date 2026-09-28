@@ -59,7 +59,7 @@ function Dashboard() {
 
   function loadData() {
     setLoading(true);
-    Promise.all([listChecklists(), listObrasStore()])
+    Promise.all([listChecklists({ data: undefined }), listObrasStore()])
       .then(([guias, o]) => {
         setItems(guias);
         setObras(o);
