@@ -1,26 +1,40 @@
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteTsConfigPaths from "vite-tsconfig-paths";
+import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 
 if (process.env.VERCEL) {
   process.env.SERVER_PRESET = "vercel";
 }
 
-// TanStack Start entry — aponta para o wrapper SSR de erros.
 export default defineConfig({
-  cloudflare: false,
-  tanstackStart: {
-    server: { entry: "server" },
-  },
-  vite: {
-    server: {
-      port: 8433,
-      strictPort: false,
-      open: true,
-    },
-    plugins: [
-      nitro({
-        preset: "vercel",
-      }),
+  plugins: [
+    viteTsConfigPaths({ projects: ["./tsconfig.json"] }),
+    tanstackStart({
+      server: { entry: "server" },
+    }),
+    react(),
+    tailwindcss(),
+    nitro({
+      preset: "vercel",
+    }),
+  ],
+  resolve: {
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
     ],
   },
+  server: {
+    port: 8433,
+    strictPort: false,
+    open: true,
+  },
 });
+
