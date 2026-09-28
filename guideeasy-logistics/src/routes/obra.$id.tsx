@@ -7,7 +7,7 @@ import {
   type Obra,
   type Checklist,
   getObraStore,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { useAuth } from "@/lib/session";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
@@ -48,7 +48,7 @@ export const Route = createFileRoute("/obra/$id")({
 
 async function fetchObra(id: string): Promise<Obra | null> {
   try {
-    return await getObraStore(id);
+    return await getObraStore({ data: id });
   } catch {
     return null;
   }
@@ -81,7 +81,7 @@ function ObraDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const [o, g] = await Promise.all([fetchObra(id), listChecklistsWithItemsStore(id)]);
+      const [o, g] = await Promise.all([fetchObra(id), listChecklistsWithItemsStore({ data: id })]);
       if (!o) {
         toast.error("Obra não encontrada");
         navigate({ to: "/obras" });
@@ -98,7 +98,7 @@ function ObraDetailPage() {
     if (!obra) return;
     setBusy(true);
     try {
-      await updateObraStore(id, { status: "terminada", terminated_at: Date.now() });
+      await updateObraStore({ data: { id, patch: { status: "terminada", terminated_at: Date.now() } } });
       toast.success("Obra terminada");
       setConfirmTerminar(false);
       load();
@@ -112,7 +112,7 @@ function ObraDetailPage() {
   async function handleApagarObra() {
     setBusy(true);
     try {
-      await deleteObraStore(id);
+      await deleteObraStore({ data: id });
       toast.success("Obra apagada");
       navigate({ to: "/obras" });
     } catch (e: unknown) {

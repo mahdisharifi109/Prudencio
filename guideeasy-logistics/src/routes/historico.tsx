@@ -5,7 +5,7 @@ import {
   deleteActivityLogStore,
   deleteAllActivityLogsStore,
   type ActivityLog,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { useAuth } from "@/lib/session";
 import { toast } from "sonner";
 import {
@@ -72,7 +72,7 @@ function HistoricoPage() {
   async function handleDelete(id: string) {
     setDeleting(true);
     try {
-      await deleteActivityLogStore(id);
+      await deleteActivityLogStore({ data: id });
       setLogs((prev) => prev.filter((l) => l.id !== id));
       toast.success("Registo apagado.");
     } catch {

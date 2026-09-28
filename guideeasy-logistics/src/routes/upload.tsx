@@ -6,7 +6,7 @@ import {
   listObrasStore,
   type ChecklistItem,
   type Obra,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { useAuth } from "@/lib/session";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
@@ -183,10 +183,10 @@ function UploadPage() {
     }
     setSaving(true);
     try {
-      const id = await createChecklist({
+      const id = await createChecklist({ data: {
         ...buildChecklist(),
         created_by: profile?.name,
-      });
+      } });
       toast.success("Guia guardada com sucesso");
       navigate({ to: "/checklist/$id", params: { id } });
     } catch (e: unknown) {

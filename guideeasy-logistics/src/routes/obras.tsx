@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { listObrasStore, createObraStore, type Obra } from "@/lib/store";
+import { listObrasStore, createObraStore, type Obra } from "@/lib/store-server-fns";
 import { useAuth } from "@/lib/session";
 import { toast } from "sonner";
 import {
@@ -70,13 +70,13 @@ function ObrasPage() {
     setNomeError("");
     setSaving(true);
     try {
-      await createObraStore({
+      await createObraStore({ data: {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         status: "ativa",
         created_by: profile?.name,
         created_at: Date.now(),
-      });
+      } });
       toast.success("Obra criada com sucesso");
       setNome("");
       setDescricao("");

@@ -6,7 +6,7 @@ import {
   listObrasStore,
   type Checklist,
   type Obra,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { useAuth } from "@/lib/session";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { toast } from "sonner";
@@ -86,7 +86,7 @@ function Dashboard() {
   async function handleDelete(id: string) {
     setDeleting(true);
     try {
-      await deleteChecklistStore(id);
+      await deleteChecklistStore({ data: id });
       setItems((prev) => prev.filter((c) => c.id !== id));
       toast.success("Guia apagada com sucesso");
     } catch (e: unknown) {

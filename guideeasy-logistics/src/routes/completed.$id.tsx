@@ -4,7 +4,7 @@ import {
   getChecklistStore as getChecklist,
   deleteChecklistStore,
   type Checklist,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
 import { InstallAppButton } from "@/components/InstallAppButton";
@@ -57,7 +57,7 @@ function CompletedPage() {
       navigate({ to: "/" });
       return;
     }
-    getChecklist(id).then((data) => {
+    getChecklist({ data: id }).then((data) => {
       if (!data) {
         toast.error("Guia não encontrada");
         navigate({ to: "/dashboard" });
@@ -111,7 +111,7 @@ function CompletedPage() {
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteChecklistStore(c!.id);
+      await deleteChecklistStore({ data: c!.id });
       toast.success("Guia apagada");
       navigate({ to: "/dashboard" });
     } catch (e: unknown) {

@@ -5,7 +5,7 @@ import {
   updateChecklistStore as updateChecklist,
   deleteChecklistStore,
   type Checklist,
-} from "@/lib/store";
+} from "@/lib/store-server-fns";
 import { exportChecklistToExcel } from "@/lib/excel-export";
 import { shareViaWhatsApp } from "@/lib/whatsapp";
 import { useAuth } from "@/lib/session";
@@ -56,7 +56,7 @@ function GuiaPage() {
       navigate({ to: "/" });
       return;
     }
-    getChecklist(id)
+    getChecklist({ data: id })
       .then((data) => {
         if (!data) {
           toast.error("Guia não encontrada");
@@ -87,13 +87,13 @@ function GuiaPage() {
     }
     setBusy(true);
     try {
-      await updateChecklist(id, {
+      await updateChecklist({ data: { id, patch: {
         items: c.items,
         responsavel: resp.trim(),
         observacoes_colaborador: obs,
         status: "concluida",
         submitted_at: Date.now(),
-      });
+      } } });
       toast.success("Guia validada com sucesso");
       navigate({ to: "/completed/$id", params: { id } });
     } catch (e: unknown) {
@@ -106,7 +106,7 @@ function GuiaPage() {
   async function handleDelete() {
     setBusy(true);
     try {
-      await deleteChecklistStore(c!.id);
+      await deleteChecklistStore({ data: c!.id });
       toast.success("Guia apagada");
       navigate({ to: "/dashboard" });
     } catch (e: unknown) {
